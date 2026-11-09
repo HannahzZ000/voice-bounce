@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#000000">
 <title>Voice Bounce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -1044,7 +1047,7 @@
     drawLyrics(gb);
     if (gb < 0) {
       const pos = ((Math.floor(gb) - 1) % 3 + 3) % 3 + 1;
-      drawBox(['Sing along to', 'Happy Birthday', ''], gb < -5 ? 0 : (gb + 5) / 5, gb < -5 ? '' : String(pos));
+      drawBox(['Sing along and', 'catch the emojis!', ''], gb < -5 ? 0 : (gb + 5) / 5, gb < -5 ? '' : String(pos));
     } else if (hitK < SING_HITS) {
       // 落点提示：虚线胶囊（下一拍要把板子放到这里），对准了变绿
       const x = targetX(hitK), on = Math.abs(paddleX - x) <= paddleW / 2 + R * HIT_TOL;
@@ -1196,13 +1199,18 @@
   }
 
   // =====================================================================
-  // 碰撞特效：闪光 + 放射光 + 三色冲击波 + 火花拖尾 + 故障残影 + 星星 + 板子霓虹 + 震屏
+  // 碰撞特效（波普艺术 / 漫画风）：网点爆炸 + 黑色速度线 + 粗描边冲击环 + POW! 爆炸字 + 撞色纸屑 + 套色错位残影 + 星星 + 震屏
   // =====================================================================
   const CYAN = '#25F4EE', RED = '#FE2C55', GOLD = '#FFE45C';
-  const fx = { rings: [], sparks: [], ghosts: [], stars: [], rays: null, flash: 0, glow: 0, shake: 0, pad: 0, x: 0, y: 0 };
-  const tintCache = {};
+  const POP = { Y: '#FFE600', M: '#FF2E93', C: '#00C2FF', R: '#FF2A2A', K: '#111111', W: '#FFFFFF' };
+  const POP_WORDS = ['POW!', 'BAM!', 'WOW!', 'ZAP!', 'BOOM!', 'YES!', 'WHAM!'];
+  const POP_FONT = 'Bangers, "Arial Black", Impact, sans-serif';
+  const fx = { rings: [], confetti: [], ghosts: [], stars: [], dots: [], lines: null, bursts: [], glow: 0, shake: 0, pad: 0, x: 0, y: 0, lastWord: '', side: 1 };
+  const tintCache = {}, halftoneCache = {};
   const starImgs = [1, 2].map(i => { const im = new Image(); im.src = `assets/star${i}.svg?v=1`; return im; });
-  function tinted(i, color) {            // 表情的纯色剪影（用于青/红故障残影）
+  if (document.fonts && document.fonts.load) document.fonts.load('40px Bangers').catch(() => {});
+
+  function tinted(i, color) {            // 表情的纯色剪影（套色错位残影用）
     const key = i + color;
     if (tintCache[key]) return tintCache[key];
     const im = faces[i];
@@ -1215,26 +1223,53 @@
     g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
     return (tintCache[key] = c);
   }
+  // 本戴网点：中间大、往外越来越小的圆点（提前画好，之后直接贴图）
+  function halftone(color, fade) {
+    const key = color + fade;
+    if (halftoneCache[key]) return halftoneCache[key];
+    const R = 100, sc = 3, c = document.createElement('canvas');
+    c.width = c.height = R * 2 * sc;
+    const g = c.getContext('2d');
+    g.scale(sc, sc); g.fillStyle = color;
+    const step = 9;
+    for (let yy = -R; yy <= R; yy += step) {
+      for (let xx = -R + ((yy / step) % 2 ? step / 2 : 0); xx <= R; xx += step) {
+        const d = Math.hypot(xx, yy) / R;
+        if (d > 1) continue;
+        const r = fade ? 4.2 * Math.pow(1 - d, 0.7) : 2.6;
+        if (r < 0.4) continue;
+        g.beginPath(); g.arc(R + xx, R + yy, r, 0, Math.PI * 2); g.fill();
+      }
+    }
+    return (halftoneCache[key] = c);
+  }
 
   function impact(x, y, oldFace) {
     const p = Math.min(1, score / 25);                 // 连击越多越炸
     fx.x = x; fx.y = y;
-    fx.flash = 1; fx.glow = 1; fx.pad = 1;
-    fx.shake = 0.5 + 0.5 * p;
-    fx.rays = { t: 0, rot: Math.random() * Math.PI, n: 10 + Math.round(p * 6) };
-    fx.rings.push({ t: 0, c: '#fff', dx: 0, max: 95 + 50 * p });
-    fx.rings.push({ t: 0, c: CYAN, dx: -4, max: 105 + 50 * p, delay: 0.03 });
-    fx.rings.push({ t: 0, c: RED, dx: 4, max: 105 + 50 * p, delay: 0.03 });
-    const n = 22 + Math.round(p * 22);
-    const cols = [CYAN, RED, '#fff', '#fff', GOLD];
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.25;
-      const sp = 260 + Math.random() * (380 + 260 * p);
-      fx.sparks.push({ x, y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        life: 1, decay: 1.4 + Math.random() * 1.1, w: 1.6 + Math.random() * 2.2, c: cols[i % cols.length] });
+    fx.glow = 1; fx.pad = 1;
+    fx.shake = 0.55 + 0.5 * p;
+    fx.dots.push({ t: 0, x, y: y - 8, c: POP.M, max: 1.15 + 0.4 * p }, { t: -0.05, x, y: y - 8, c: POP.Y, max: 0.75 + 0.3 * p });
+    fx.lines = { t: 0, rot: Math.random() * Math.PI, n: 16 + Math.round(p * 8), len: 60 + 50 * p };
+    fx.rings.push({ t: 0, max: 100 + 50 * p });
+    // POW! 爆炸字：左右交替出现在表情旁边
+    fx.side = -fx.side;
+    let word; do { word = POP_WORDS[Math.floor(Math.random() * POP_WORDS.length)]; } while (word === fx.lastWord);
+    fx.lastWord = word;
+    const n = 12, r0 = 44 + 14 * p, spikes = [];
+    for (let i = 0; i < n * 2; i++) spikes.push(i % 2 ? r0 * (0.62 + Math.random() * 0.08) : r0 * (0.95 + Math.random() * 0.25));
+    fx.bursts = [{ t: 0, word, spikes, r0, rot: (Math.random() - 0.5) * 0.45,
+      x: Math.max(70, Math.min(W - 70, x + fx.side * (70 + Math.random() * 20))), y: y - 110 - Math.random() * 25 }];
+    // 撞色纸屑：三角 / 方块 / 圆点 / 闪电，黑色描边
+    const cols = [POP.Y, POP.M, POP.C, POP.W, POP.R];
+    for (let i = 0, nc = 16 + Math.round(p * 14); i < nc; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
+      const sp = 250 + Math.random() * (320 + 200 * p);
+      fx.confetti.push({ x, y: y - 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 16,
+        size: 5 + Math.random() * 5, shape: i % 4, c: cols[i % cols.length], life: 1, decay: 1.1 + Math.random() * 0.6 });
     }
-    // 设计稿里的两种小星星：从撞击点向四周弹出，边转边飘，一闪一闪
-    for (let i = 0, n2 = 10 + Math.round(p * 6); i < n2; i++) {
+    // 设计稿里的两种小星星
+    for (let i = 0, n2 = 8 + Math.round(p * 6); i < n2; i++) {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.35;
       const sp = 120 + Math.random() * 230;
       fx.stars.push({ x, y: y - 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, delay: Math.random() * 0.08,
@@ -1245,108 +1280,139 @@
   }
 
   function updateFx(dt) {
-    fx.flash = Math.max(0, fx.flash - dt * 5);
-    fx.glow = Math.max(0, fx.glow - dt * 2.8);
+    fx.glow = Math.max(0, fx.glow - dt * 3);
     fx.pad = Math.max(0, fx.pad - dt * 4);
     fx.shake = Math.max(0, fx.shake - dt * 4);
-    if (fx.rays) { fx.rays.t += dt; if (fx.rays.t > 0.3) fx.rays = null; }
+    for (const d of fx.dots) d.t += dt;
+    fx.dots = fx.dots.filter(d => d.t < 0.45);
+    if (fx.lines) { fx.lines.t += dt; if (fx.lines.t > 0.28) fx.lines = null; }
     for (const r of fx.rings) r.t += dt;
-    fx.rings = fx.rings.filter(r => r.t < 0.55 + (r.delay || 0));
-    for (const sp of fx.sparks) {
-      sp.px = sp.x; sp.py = sp.y;
-      sp.vy += 1100 * dt; sp.vx *= Math.pow(0.25, dt); sp.vy *= Math.pow(0.6, dt);
-      sp.x += sp.vx * dt; sp.y += sp.vy * dt;
-      sp.life -= sp.decay * dt;
+    fx.rings = fx.rings.filter(r => r.t < 0.5);
+    for (const b of fx.bursts) b.t += dt;
+    fx.bursts = fx.bursts.filter(b => b.t < 0.7);
+    for (const c of fx.confetti) {
+      c.vy += 1000 * dt; c.vx *= Math.pow(0.3, dt);
+      c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.spin * dt; c.life -= c.decay * dt;
     }
-    fx.sparks = fx.sparks.filter(sp => sp.life > 0);
+    fx.confetti = fx.confetti.filter(c => c.life > 0);
     for (const st of fx.stars) {
       st.t += dt;
       if (st.t < st.delay) continue;
-      st.vx *= Math.pow(0.08, dt); st.vy = st.vy * Math.pow(0.08, dt) + 60 * dt;   // 很快减速，然后轻轻下坠
+      st.vx *= Math.pow(0.08, dt); st.vy = st.vy * Math.pow(0.08, dt) + 60 * dt;
       st.x += st.vx * dt; st.y += st.vy * dt; st.rot += st.spin * dt;
     }
     fx.stars = fx.stars.filter(st => st.t < st.life + st.delay);
     for (const g of fx.ghosts) g.t += dt;
     fx.ghosts = fx.ghosts.filter(g => g.t < 0.38);
   }
-  function clearFx() { fx.rings = []; fx.sparks = []; fx.ghosts = []; fx.stars = []; fx.rays = null; fx.flash = fx.glow = fx.shake = fx.pad = 0; }
+  function clearFx() { fx.rings = []; fx.confetti = []; fx.ghosts = []; fx.stars = []; fx.dots = []; fx.bursts = []; fx.lines = null; fx.glow = fx.shake = fx.pad = 0; }
 
   const easeOut = t => 1 - Math.pow(1 - t, 3);
 
-  function drawFxBack() {                // 在板子和表情后面：闪光、放射光、冲击波
+  function drawFxBack() {                // 在板子和表情后面：网点爆炸、速度线、冲击环
     const { x, y } = fx;
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    if (fx.flash > 0) {
-      const r = 70 + 50 * (1 - fx.flash);
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, `rgba(255,255,255,${0.9 * fx.flash})`);
-      g.addColorStop(0.35, `rgba(37,244,238,${0.45 * fx.flash})`);
-      g.addColorStop(0.7, `rgba(254,44,85,${0.25 * fx.flash})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    for (const d of fx.dots) {
+      if (d.t <= 0) continue;
+      const t = d.t / 0.45, sc = (0.35 + d.max * easeOut(t)), R = 100 * sc;
+      ctx.globalAlpha = t < 0.6 ? 1 : (1 - t) / 0.4;
+      ctx.drawImage(halftone(d.c, true), d.x - R, d.y - R, R * 2, R * 2);
     }
-    if (fx.rays) {
-      const t = fx.rays.t / 0.3, len = 60 + 150 * easeOut(t), a = (1 - t) * 0.55;
-      ctx.translate(x, y);
-      ctx.rotate(fx.rays.rot + t * 0.4);
-      for (let i = 0; i < fx.rays.n; i++) {
-        const ang = (i / fx.rays.n) * Math.PI * 2, w = 0.07;
-        ctx.fillStyle = i % 2 ? `rgba(37,244,238,${a})` : `rgba(255,255,255,${a})`;
+    ctx.globalAlpha = 1;
+    if (fx.lines) {                                   // 漫画速度线：黑色尖三角往外射
+      const L = fx.lines, t = L.t / 0.28;
+      ctx.save();
+      ctx.translate(x, y - 8); ctx.rotate(L.rot);
+      ctx.globalAlpha = 1 - t * t;
+      ctx.fillStyle = POP.K;
+      for (let i = 0; i < L.n; i++) {
+        const ang = (i / L.n) * Math.PI * 2, r0 = 46 + 70 * easeOut(t), r1 = r0 + L.len * (i % 2 ? 0.6 : 1), w = 0.045;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(ang) * 18, Math.sin(ang) * 18);
-        ctx.lineTo(Math.cos(ang - w) * len, Math.sin(ang - w) * len);
-        ctx.lineTo(Math.cos(ang + w) * len, Math.sin(ang + w) * len);
+        ctx.moveTo(Math.cos(ang - w) * r0, Math.sin(ang - w) * r0);
+        ctx.lineTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
+        ctx.lineTo(Math.cos(ang + w) * r0, Math.sin(ang + w) * r0);
         ctx.closePath(); ctx.fill();
       }
-      ctx.setTransform(S * DPR, 0, 0, S * DPR, 0, 0);
+      ctx.restore();
     }
-    for (const r of fx.rings) {
-      const t = Math.max(0, (r.t - (r.delay || 0)) / 0.55);
-      if (t <= 0) continue;
-      const e = easeOut(t), rad = 14 + r.max * e;
-      ctx.strokeStyle = r.c;
-      ctx.globalAlpha = (1 - t) * 0.9;
-      ctx.lineWidth = 7 * (1 - t) + 0.5;
-      ctx.beginPath();
-      ctx.ellipse(x + r.dx, y, rad, rad * 0.42, 0, 0, Math.PI * 2);
-      ctx.stroke();
+    for (const r of fx.rings) {                       // 粗黑描边 + 黄色内圈的冲击环
+      const t = r.t / 0.5, rad = 16 + r.max * easeOut(t);
+      ctx.beginPath(); ctx.ellipse(x, y, rad, rad * 0.4, 0, 0, Math.PI * 2);
+      ctx.lineWidth = 8 * (1 - t) + 1; ctx.strokeStyle = POP.K; ctx.stroke();
+      ctx.lineWidth = 4 * (1 - t) + 0.5; ctx.strokeStyle = POP.Y; ctx.stroke();
     }
     ctx.restore();
   }
 
-  function drawFxFront() {               // 在表情前面：故障残影、火花、星星
+  function starPath(b) {
+    const n = b.spikes.length;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * b.spikes[i] * 1.25, Math.sin(a) * b.spikes[i]);
+    }
+    ctx.closePath();
+  }
+  function drawBurst(b) {                // POW! 爆炸贴纸：黄底尖角 + 品红错位阴影 + 网点 + 粗黑描边 + 红字
+    const t = b.t;
+    let sc;
+    if (t < 0.13) sc = easeOutBack(t / 0.13) * 1.12;
+    else if (t < 0.48) sc = 1.12 - 0.12 * Math.min(1, (t - 0.13) / 0.08);
+    else sc = Math.max(0, 1 - (t - 0.48) / 0.2);
+    if (sc <= 0.01) return;
     ctx.save();
-    for (const g of fx.ghosts) {
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.rot + (t < 0.25 ? Math.sin(t * 60) * 0.04 : 0));
+    ctx.scale(sc, sc);
+    ctx.lineJoin = 'miter';
+    ctx.save(); ctx.translate(7, 7); starPath(b); ctx.fillStyle = POP.M; ctx.fill(); ctx.restore();
+    starPath(b); ctx.fillStyle = POP.Y; ctx.fill();
+    ctx.save(); starPath(b); ctx.clip();
+    ctx.globalAlpha = 0.55; const R = b.r0 * 1.4;
+    ctx.drawImage(halftone('#FF9F1C', false), -R, -R, R * 2, R * 2);
+    ctx.restore();
+    starPath(b); ctx.lineWidth = 4; ctx.strokeStyle = POP.K; ctx.stroke();
+    const fs = b.r0 * (b.word.length > 4 ? 0.62 : 0.74);
+    ctx.font = `${fs}px ${POP_FONT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 6; ctx.strokeStyle = POP.K;
+    ctx.fillStyle = POP.C; ctx.strokeText(b.word, 3, 4); ctx.fillText(b.word, 3, 4);   // 青色错位
+    ctx.strokeText(b.word, 0, 1); ctx.fillStyle = POP.R; ctx.fillText(b.word, 0, 1);
+    ctx.restore();
+  }
+
+  function drawFxFront() {               // 在表情前面：套色残影、纸屑、星星、POW!
+    ctx.save();
+    for (const g of fx.ghosts) {                      // 印刷套色错位：品红 + 青 两层
       const t = g.t / 0.38, im = faces[g.i];
       if (!im.naturalWidth) continue;
-      const sc = FACE / Math.max(im.naturalWidth, im.naturalHeight) * (1 + 0.7 * easeOut(t));
+      const sc = FACE / Math.max(im.naturalWidth, im.naturalHeight) * (1 + 0.45 * easeOut(t));
       const w = im.naturalWidth * sc, h = im.naturalHeight * sc;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = (1 - t) * 0.75;
-      [[CYAN, -1], [RED, 1]].forEach(([c, d]) => {
+      ctx.globalAlpha = (1 - t) * 0.85;
+      [[POP.M, -1, 0], [POP.C, 1, -1]].forEach(([c, d, dy]) => {
         const tc = tinted(g.i, c);
-        if (tc) ctx.drawImage(tc, g.x - w / 2 + d * (4 + 16 * t), g.y - h / 2 - 6 * t, w, h);
+        if (tc) ctx.drawImage(tc, g.x - w / 2 + d * (4 + 14 * t), g.y - h / 2 + dy * 6 * t - 4 * t, w, h);
       });
     }
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    for (const sp of fx.sparks) {
-      const a = Math.max(0, sp.life);
-      ctx.globalAlpha = a;
-      ctx.strokeStyle = sp.c;
-      ctx.lineWidth = sp.w * (0.5 + a * 0.5);
-      const tx = sp.x - (sp.x - sp.px) * 3.5, ty = sp.y - (sp.y - sp.py) * 3.5;   // 拖尾
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(sp.x, sp.y); ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.w * 0.55 * a, 0, Math.PI * 2); ctx.fill();
+    for (const c of fx.confetti) {
+      ctx.globalAlpha = Math.min(1, c.life * 2);
+      ctx.save();
+      ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+      const z = c.size;
+      ctx.beginPath();
+      if (c.shape === 0) { ctx.moveTo(0, -z); ctx.lineTo(z * 0.9, z * 0.7); ctx.lineTo(-z * 0.9, z * 0.7); ctx.closePath(); }
+      else if (c.shape === 1) ctx.rect(-z * 0.7, -z * 0.7, z * 1.4, z * 1.4);
+      else if (c.shape === 2) ctx.arc(0, 0, z * 0.75, 0, Math.PI * 2);
+      else { ctx.moveTo(-z, -z * 0.3); ctx.lineTo(z * 0.1, -z * 0.3); ctx.lineTo(-z * 0.2, z * 0.2); ctx.lineTo(z, z * 0.2); ctx.lineTo(z * 0.2, z); ctx.lineTo(z * 0.4, z * 0.45); ctx.lineTo(-z * 0.6, z * 0.45); ctx.closePath(); }
+      ctx.fillStyle = c.c; ctx.fill();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = POP.K; ctx.stroke();
+      ctx.restore();
     }
-    ctx.globalCompositeOperation = 'source-over';      // 星星保持设计稿原色
     for (const st of fx.stars) {
       const t = (st.t - st.delay) / st.life;
       if (t <= 0 || !st.img.naturalWidth) continue;
-      const pop = t < 0.2 ? easeOut(t / 0.2) * 1.3 : 1.3 - 0.3 * Math.min(1, (t - 0.2) / 0.2);   // 弹出时先放大一下
+      const pop = t < 0.2 ? easeOut(t / 0.2) * 1.3 : 1.3 - 0.3 * Math.min(1, (t - 0.2) / 0.2);
       const twinkle = 0.75 + 0.25 * Math.sin(st.tw + st.t * 28);
       const sz = st.size * pop * twinkle * (t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1);
       if (sz <= 0.3) continue;
@@ -1358,6 +1424,8 @@
       ctx.drawImage(st.img, -sz, -sz * ar, sz * 2, sz * 2 * ar);
       ctx.restore();
     }
+    ctx.globalAlpha = 1;
+    for (const b of fx.bursts) drawBurst(b);
     ctx.restore();
   }
 
@@ -1478,7 +1546,7 @@
 
     if (screen === 'rec' && state === 'countdown') {
       const left = Math.max(0, (countdownEnd - now) / 1000);
-      drawBox(['Higher pitch moves right', 'lower pitch moves left', ''], left / 3, String(Math.max(1, Math.ceil(left))));
+      drawBox(['Change your voice pitch', 'to move the paddle', ''], left / 3, String(Math.max(1, Math.ceil(left))));
     }
 
     const tw = now / 1000;
@@ -1504,15 +1572,12 @@
       const px = paddleX - pw / 2, py = PAD_Y + (PAD_H - ph) / 2 + 3 * sq;
       ctx.fillStyle = '#000';
       rr(px, py, pw, ph, ph / 2); ctx.fill();
-      if (fx.glow > 0) {
+      if (fx.glow > 0) {                               // 波普描边：品红错位 + 黄色粗边
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.lineWidth = 2.5;
-        ctx.shadowBlur = 18 * fx.glow;
-        [[CYAN, -1.5], [RED, 1.5]].forEach(([c, d]) => {
-          ctx.strokeStyle = c; ctx.shadowColor = c; ctx.globalAlpha = fx.glow;
-          rr(px + d, py, pw, ph, ph / 2); ctx.stroke();
-        });
+        ctx.globalAlpha = Math.min(1, fx.glow * 1.6);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = POP.M; rr(px + 3, py + 3, pw, ph, ph / 2); ctx.stroke();
+        ctx.strokeStyle = POP.Y; rr(px, py, pw, ph, ph / 2); ctx.stroke();
         ctx.restore();
       }
     }
