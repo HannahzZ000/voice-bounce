@@ -1064,12 +1064,13 @@
   // =====================================================================
   // 海浪：板子下面三层会动的浪；没接住就掉进水里激起水花
   // =====================================================================
-  // 波普风海浪：平涂撞色 + 网点 + 粗黑描边 + 白色高光
+  // 海浪：之前的渐变半透明风格 + 一层淡淡的波点
   const WAVES = [
-    { off: 0,  A: 5, k: 0.030, w: 1.1,  A2: 3,   k2: 0.071, w2: -1.7, ph: 0, fill: 'rgba(120,228,255,.88)', dot: 'rgba(255,255,255,.55)' },
-    { off: 11, A: 6, k: 0.024, w: -1.4, A2: 2.5, k2: 0.058, w2: 2.1,  ph: 2, fill: 'rgba(0,174,255,.93)',   dot: 'rgba(0,90,255,.55)' },
-    { off: 22, A: 5, k: 0.036, w: 1.9,  A2: 2,   k2: 0.090, w2: -2.6, ph: 4, fill: 'rgba(30,72,255,.96)',   dot: 'rgba(0,200,255,.55)' },
+    { off: 0,  A: 5, k: 0.030, w: 1.1,  A2: 3,   k2: 0.071, w2: -1.7, ph: 0, top: 'rgba(130,215,255,.42)', bot: 'rgba(40,130,225,.30)', foam: .5,  dot: 'rgba(255,255,255,.22)' },
+    { off: 11, A: 6, k: 0.024, w: -1.4, A2: 2.5, k2: 0.058, w2: 2.1,  ph: 2, top: 'rgba(60,165,248,.58)',  bot: 'rgba(18,92,205,.42)',  foam: .65, dot: 'rgba(255,255,255,.2)' },
+    { off: 22, A: 5, k: 0.036, w: 1.9,  A2: 2,   k2: 0.090, w2: -2.6, ph: 4, top: 'rgba(28,120,232,.72)',  bot: 'rgba(6,48,150,.55)',   foam: .85, dot: 'rgba(255,255,255,.18)' },
   ];
+
 
   let splashes = [], drops = [], ripples = [];
   const waterBase = () => LINE_Y + 42;   // 海面在轨道下方一点
@@ -1095,7 +1096,7 @@
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.85;
       const sp = 160 + Math.random() * 360;
       drops.push({ x: x + (Math.random() - 0.5) * 24, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        r: 2.2 + Math.random() * 3.8, life: 1, c: ['#fff', '#fff', '#78E4FF', '#00AEFF'][i % 4] });
+        r: 1.8 + Math.random() * 3.6, life: 1, c: Math.random() < 0.55 ? '#fff' : '#9EDCFF' });
     }
     fx.shake = 0.6;
     if (navigator.vibrate) navigator.vibrate([30, 20, 50]);
@@ -1131,19 +1132,14 @@
     if (close) { ctx.lineTo(W + 6, H + 10); ctx.lineTo(-6, H + 10); ctx.closePath(); }
   }
   function drawWave(i, t) {
-    const L = WAVES[i];
-    ctx.save();
+    const L = WAVES[i], y0 = waterBase() + L.off;
     wavePath(i, t, true);
-    ctx.fillStyle = L.fill; ctx.fill();                // 平涂
-    ctx.fillStyle = dotPattern(L.dot); ctx.fill();     // 网点
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    wavePath(i, t, false);
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 3.2; ctx.stroke();   // 粗黑描边
-    ctx.translate(0, 5);                               // 描边下面一道断续的白色高光
-    wavePath(i, t, false);
-    ctx.setLineDash([16, 22]); ctx.lineDashOffset = -t * 30 * (i % 2 ? -1 : 1);
-    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2.2; ctx.stroke();
-    ctx.restore();
+    const g = ctx.createLinearGradient(0, y0 - 10, 0, H);
+    g.addColorStop(0, L.top); g.addColorStop(1, L.bot);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = dotPattern(L.dot); ctx.fill();     // 淡淡的波点
+    wavePath(i, t, false);                             // 浪尖白色泡沫
+    ctx.strokeStyle = `rgba(255,255,255,${L.foam})`; ctx.lineWidth = 2.2; ctx.stroke();
   }
 
   function drawSplashFx(t) {
@@ -1151,10 +1147,8 @@
     for (const r of ripples) {
       if (r.t <= 0) continue;
       const k = r.t / 0.9, y = waveY(1, r.x, t);
-      ctx.globalAlpha = 1 - k;
-      ctx.beginPath(); ctx.ellipse(r.x, y, 12 + 90 * easeOut(k), 4 + 18 * easeOut(k), 0, 0, Math.PI * 2);
-      ctx.strokeStyle = '#111'; ctx.lineWidth = 5 * (1 - k) + 1; ctx.stroke();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4 * (1 - k) + 0.5; ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${0.85 * (1 - k)})`; ctx.lineWidth = 3 * (1 - k) + 0.5;
+      ctx.beginPath(); ctx.ellipse(r.x, y, 12 + 90 * easeOut(k), 4 + 18 * easeOut(k), 0, 0, Math.PI * 2); ctx.stroke();
     }
     for (const d of drops) {
       ctx.globalAlpha = Math.max(0, Math.min(1, d.life * 1.5));
@@ -1162,7 +1156,6 @@
       const sp = Math.hypot(d.vx, d.vy), st = Math.min(2.2, 1 + sp / 400);   // 速度快的水滴拉长
       ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(Math.atan2(d.vy, d.vx));
       ctx.beginPath(); ctx.ellipse(0, 0, d.r * st, d.r, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.lineWidth = 1.3; ctx.strokeStyle = '#111'; ctx.stroke();   // 水滴也带黑描边
       ctx.restore();
     }
     ctx.restore();
