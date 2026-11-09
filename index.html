@@ -10,7 +10,7 @@
 <title>Voice Bounce</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Poppins:ital,wght@1,800&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -1047,7 +1047,7 @@
     drawLyrics(gb);
     if (gb < 0) {
       const pos = ((Math.floor(gb) - 1) % 3 + 3) % 3 + 1;
-      drawBox(['Sing along and', 'catch the emojis!', ''], gb < -5 ? 0 : (gb + 5) / 5, gb < -5 ? '' : String(pos));
+      drawBox(['Sing along and', 'catch the emojis!'], gb < -5 ? 0 : (gb + 5) / 5, gb < -5 ? '' : String(pos));
     } else if (hitK < SING_HITS) {
       // 落点提示：虚线胶囊（下一拍要把板子放到这里），对准了变绿
       const x = targetX(hitK), on = Math.abs(paddleX - x) <= paddleW / 2 + R * HIT_TOL;
@@ -1386,8 +1386,7 @@
     drawBubble(0, 0, '#FFFBEA');
     // Score（字体和倒计时提示一致）
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = FONT; ctx.fillStyle = POP.K;
-    ctx.fillText('Score', 0, -RY + 44);
+    outlineText('Score', 0, -RY + 44, UI_FONT, 2);
     // 大数字：漫画字体，黄字 + 粗黑描边 + 红色错位
     const shown = Math.round(score * Math.min(1, t / 0.7));          // 数字滚动上来
     const pop = t > 0.7 && t < 0.95 ? 1 + 0.15 * Math.sin((t - 0.7) / 0.25 * Math.PI) : 1;
@@ -1421,7 +1420,7 @@
   const fx = { rings: [], confetti: [], ghosts: [], stars: [], dots: [], lines: null, bursts: [], glow: 0, shake: 0, pad: 0, x: 0, y: 0, lastWord: '', side: 1 };
   const tintCache = {}, halftoneCache = {};
   const starImgs = [1, 2].map(i => { const im = new Image(); im.src = `assets/star${i}.svg?v=1`; return im; });
-  if (document.fonts && document.fonts.load) document.fonts.load('40px Bangers').catch(() => {});
+  if (document.fonts && document.fonts.load) ['40px Bangers', 'italic 800 20px Poppins'].forEach(f => document.fonts.load(f).catch(() => {}));
 
   function tinted(i, color) {            // 表情的纯色剪影（套色错位残影用）
     const key = i + color;
@@ -1739,21 +1738,24 @@
   }
   const FONT = '700 14.5px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif';
 
-  function drawBox(lines, p, center) {
+  // 设计稿文字样式：Poppins 粗斜体，白字 + 黑描边（描边只露在字外面，所以线宽是外露宽度的两倍）
+  const UI_FONT = 'italic 800 20px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif';
+  function outlineText(text, x, y, font, out, fill = '#fff', shadow = null) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,.5)';
-    rr(BOX.x, BOX.y, BOX.w, BOX.h, BOX.r); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = FONT;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    lines.forEach((t, i) => ctx.fillText(t, 195, BOX.y + 21 + i * 19));
-    ctx.lineWidth = RING.w;
-    ctx.strokeStyle = 'rgba(255,255,255,.43)';
-    ctx.beginPath(); ctx.arc(RING.x, RING.y, RING.r, 0, Math.PI * 2); ctx.stroke();
-    if (p > 0) {
-      ctx.strokeStyle = '#FE2C55';
-      ctx.beginPath(); ctx.arc(RING.x, RING.y, RING.r, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2); ctx.stroke();
+    ctx.font = font; ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+    if (shadow) {                                      // 硬投影：整个描边字的形状错开一点
+      ctx.fillStyle = ctx.strokeStyle = shadow.c; ctx.lineWidth = out * 2;
+      ctx.strokeText(text, x + shadow.dx, y + shadow.dy); ctx.fillText(text, x + shadow.dx, y + shadow.dy);
     }
-    if (center) { ctx.font = '700 20px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.fillText(center, RING.x, RING.y + 1); }
+    ctx.lineWidth = out * 2; ctx.strokeStyle = '#000'; ctx.strokeText(text, x, y);
+    ctx.fillStyle = fill; ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+  function drawBox(lines, p, center) {               // 倒计时：提示文字 + 大数字（无底框）
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    lines.forEach((t, i) => outlineText(t, 195, BOX.y + 6 + i * 26, UI_FONT, 2));
+    if (center) outlineText(center, 195, RING.y + 8, 'italic 800 54px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif', 4, '#fff', { c: '#25F4EE', dx: 4, dy: 4 });
     ctx.restore();
   }
 
@@ -1769,7 +1771,7 @@
 
     if (screen === 'rec' && state === 'countdown') {
       const left = Math.max(0, (countdownEnd - now) / 1000);
-      drawBox(['Change your voice pitch', 'to move the paddle', ''], left / 3, String(Math.max(1, Math.ceil(left))));
+      drawBox(['Change your voice', 'pitch to move the', 'paddle'], left / 3, String(Math.max(1, Math.ceil(left))));
     }
 
     const tw = now / 1000;
@@ -1778,13 +1780,16 @@
 
     // Low / High 轨道
     ctx.save();
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(LINE_X0, LINE_Y - 1, LINE_X1 - LINE_X0, 2);
-    ctx.font = '700 14px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+    const lx0 = LINE_X0 + 3, lx1 = LINE_X1 - 4;          // 粉→青渐变线 + 上沿白线 + 两端白点
+    const lg = ctx.createLinearGradient(lx0, 0, lx1, 0);
+    lg.addColorStop(0, '#FE2C55'); lg.addColorStop(1, '#25F4EE');
+    ctx.fillStyle = lg; ctx.fillRect(lx0, LINE_Y, lx1 - lx0, 4);
+    ctx.fillStyle = '#fff'; ctx.fillRect(lx0, LINE_Y - 1, lx1 - lx0, 2);
+    [lx0, lx1].forEach(x => { ctx.beginPath(); ctx.arc(x, LINE_Y + 2, 5, 0, Math.PI * 2); ctx.fill(); });
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 3;
-    ctx.textAlign = 'left'; ctx.fillText('Low', LINE_X0, LINE_Y + 28);
-    ctx.textAlign = 'right'; ctx.fillText('High', LINE_X1, LINE_Y + 28);
+    const LH_FONT = 'italic 800 14.5px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif';
+    ctx.textAlign = 'left'; outlineText('Low', LINE_X0 - 2, LINE_Y + 30, LH_FONT, 1, '#fff', { c: '#FE2C55', dx: -1, dy: 2 });
+    ctx.textAlign = 'right'; outlineText('High', LINE_X1, LINE_Y + 30, LH_FONT, 1, '#fff', { c: '#25F4EE', dx: -1, dy: 2 });
     ctx.restore();
 
     drawFxBack();
@@ -1795,6 +1800,7 @@
       const px = paddleX - pw / 2, py = PAD_Y + (PAD_H - ph) / 2 + 3 * sq;
       ctx.fillStyle = '#000';
       rr(px, py, pw, ph, ph / 2); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();   // 白色细描边
       if (fx.glow > 0) {                               // 波普描边：品红错位 + 黄色粗边
         ctx.save();
         ctx.globalAlpha = Math.min(1, fx.glow * 1.6);
