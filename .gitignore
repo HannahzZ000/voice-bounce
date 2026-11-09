@@ -1,0 +1,7 @@
+# 只发布游戏本身：index.html + assets，其余设计稿 / 原图 / 备份都不上传
+/*
+!/index.html
+!/assets/
+!/.gitignore
+!/.nojekyll
+!/README.md
