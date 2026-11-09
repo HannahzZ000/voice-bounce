@@ -1158,7 +1158,7 @@
     ctx.drawImage(waveDots(i), 0, y0 - 12, W, H - y0 + 24);
     ctx.restore();
     wavePath(i, t, false);                             // 浪尖白色泡沫
-    ctx.strokeStyle = `rgba(255,255,255,${L.foam})`; ctx.lineWidth = 2.2; ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${L.foam})`; ctx.lineWidth = 3.2; ctx.stroke();
   }
 
   function drawSplashFx(t) {
@@ -1395,7 +1395,7 @@
     const bubble = (part) => {
       ctx.beginPath();
       if (part !== 2) ctx.ellipse(0, 0, RX, RY, 0, 0, Math.PI * 2);
-      if (part !== 1) { ctx.moveTo(-RX * 0.44, RY * 0.76); ctx.lineTo(-RX * 0.66, RY * 1.17); ctx.lineTo(-RX * 0.2, RY * 0.93); ctx.closePath(); }
+      if (part !== 1) { ctx.moveTo(-RX * 0.57, RY * 0.6); ctx.lineTo(-RX * 0.66, RY * 1.17); ctx.lineTo(-RX * 0.2, RY * 0.93); ctx.closePath(); }
     };
     const drawBubble = (dx, dy, fill) => {             // 先描双倍粗的边再填色，尾巴和椭圆连成一个外轮廓
       ctx.save(); ctx.translate(dx, dy);
