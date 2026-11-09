@@ -1269,14 +1269,18 @@
     }
     ctx.restore();
   }
-  const BAND_SPOTS = () => [[52, H - 32, 'violin'], [126, H - 30, 'sax'], [270, H - 30, 'trumpet'], [342, H - 34, 'drum']];
+  // 乐器贴图（波普插画）：[x, 底部 y, 名字, 显示高度, 基础角度]
+  const INST_IMGS = {};
+  ['guitar', 'violin', 'drum', 'sax', 'trumpet'].forEach(k => { const im = new Image(); im.src = `assets/inst_${k}.png?v=1`; INST_IMGS[k] = im; });
+  const BAND_SPOTS = () => [[34, H - 18, 'guitar', 150, -0.16], [102, H - 22, 'violin', 118, 0.14], [195, H - 22, 'drum', 92, 0],
+    [290, H - 20, 'sax', 116, 0.06], [352, H - 70, 'trumpet', 44, -0.42]];
   function drawBand(now) {
     const dt = Math.min(0.05, (now - (bandLastT || now)) / 1000); bandLastT = now;
     const beat = bandBeat(now), bi = Math.floor(beat), ph = beat - bi;
     const pulse = beat >= 0 || !song ? Math.exp(-ph * 6) : 0;
     if (bi !== bandLastBeat) {                         // 每拍：从某个乐器冒出一个音符，并按一个琴键
       bandLastBeat = bi;
-      const sp = BAND_SPOTS()[Math.floor(Math.random() * 4)];
+      const spots = BAND_SPOTS(), sp = spots[Math.floor(Math.random() * spots.length)];
       bandNotes.push({ x: sp[0] + (Math.random() - 0.5) * 20, y: sp[1] - 100, vx: (Math.random() - 0.5) * 30, vy: -55 - Math.random() * 30,
         rot: (Math.random() - 0.5) * 0.6, sz: 0.9 + Math.random() * 0.5, c: [POP.Y, POP.M, POP.C, '#fff'][Math.floor(Math.random() * 4)], dbl: Math.random() < 0.4, life: 1 });
       bandKey = Math.floor(Math.random() * 15);
@@ -1291,12 +1295,14 @@
     edge(); ctx.strokeStyle = BAND.K; ctx.lineWidth = 3.2; ctx.stroke();
     ctx.restore();
     // 乐器：每拍一跳，左右轻轻摇摆
-    BAND_SPOTS().forEach(([x, y, kind], i) => {
-      const sway = Math.sin((beat + i * 0.5) * Math.PI) * 0.09, hop = pulse * (i % 2 ? 7 : 5);
+    BAND_SPOTS().forEach(([x, y, kind, h, rot], i) => {
+      const im = INST_IMGS[kind];
+      if (!im.complete || !im.naturalWidth) return;
+      const sway = Math.sin((beat + i * 0.5) * Math.PI) * 0.07, hop = pulse * (i % 2 ? 7 : 5), k = 1 + pulse * 0.06;
+      const w = h * im.naturalWidth / im.naturalHeight;
       ctx.save();
-      ctx.translate(x, y - hop); ctx.rotate(sway); ctx.scale(0.85 + pulse * 0.05, 0.85 + pulse * 0.05);
-      if (kind === 'violin') drawViolin(beat); else if (kind === 'sax') drawSax(pulse);
-      else if (kind === 'trumpet') drawTrumpet(pulse); else drawDrum(beat, pulse);
+      ctx.translate(x, y - hop); ctx.rotate(rot + sway); ctx.scale(k, k);
+      ctx.drawImage(im, -w / 2, -h, w, h);              // 以底部中点为锚点
       ctx.restore();
     });
     for (const n of bandNotes) { n.x += (n.vx + Math.sin(n.y * 0.05) * 20) * dt; n.y += n.vy * dt; n.life -= dt * 0.55; n.rot += dt * 0.8; }
@@ -1362,10 +1368,24 @@
   }
   const easeOutBack = x => { const c = 1.70158; return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2; };
 
+  let bubbleDotCache = null;
+  function bubbleDots(RX, RY) {                        // 右下角网点：离中心越远点越大
+    if (bubbleDotCache) return bubbleDotCache;
+    const sc = 3, c = document.createElement('canvas');
+    c.width = RX * 2 * sc; c.height = RY * 2 * sc;
+    const g = c.getContext('2d');
+    g.scale(sc, sc); g.translate(RX, RY); g.fillStyle = 'rgba(255,46,147,.5)';
+    for (let y = -RY, row = 0; y <= RY; y += 5.5, row++) for (let x = -RX + (row % 2 ? 3.2 : 0); x <= RX; x += 6.4) {
+      const k = Math.min(1, Math.max(0, (x / RX * 0.75 + y / RY * 0.85 - 0.45) / 0.85));
+      if (k <= 0.04) continue;
+      g.beginPath(); g.arc(x, y, 2.4 * k, 0, Math.PI * 2); g.fill();
+    }
+    return (bubbleDotCache = c);
+  }
   function drawResult(now) {
     const t = (now - resultAt) / 1000;
     const e = t < 0.45 ? easeOutBack(t / 0.45) : 1;
-    const cw = 256, ch = 170, cx = 195, cy = BOX.y + 22;
+    const cw = 236, ch = 158, cx = 195, cy = BOX.y + 22;
     ctx.save();
     ctx.globalAlpha = Math.min(1, t / 0.15);
     ctx.translate(cx, cy); ctx.scale(e, e);
@@ -1382,20 +1402,67 @@
       ctx.fillStyle = fill; bubble(1); ctx.fill(); bubble(2); ctx.fill();
       ctx.restore();
     };
+    const ep = (a, k) => [Math.cos(a) * RX * k, Math.sin(a) * RY * k];   // 椭圆上的点
+    // 左边的漫画“惊叹线”
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 3.5; ctx.strokeStyle = POP.K;
+    [Math.PI * 0.93, Math.PI * 1.03, Math.PI * 1.13].forEach((a, i) => {
+      const w = 1 + 0.04 * Math.sin(now / 140 + i);
+      const [x0, y0] = ep(a, 1.1 * w), [x1, y1] = ep(a, (i === 1 ? 1.3 : 1.24) * w);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    });
+    ctx.restore();
     drawBubble(9, 9, '#2F6BFF');
     drawBubble(0, 0, '#FFFBEA');
+    // 气泡右下角的粉色网点阴影（越靠边越大）
+    ctx.save(); bubble(1); ctx.clip();
+    ctx.drawImage(bubbleDots(RX, RY), -RX, -RY, RX * 2, RY * 2);
+    ctx.restore();
+    // 左上角两笔黑色高光弧线
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = POP.K;
+    ctx.beginPath(); ctx.ellipse(0, 0, RX - 12, RY - 11, 0, Math.PI * 1.1, Math.PI * 1.24); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, 0, RX - 12, RY - 11, 0, Math.PI * 1.285, Math.PI * 1.31); ctx.stroke();
+    ctx.restore();
     // Score（字体和倒计时提示一致）
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    outlineText('Score', 0, -RY + 44, UI_FONT, 2);
+    outlineText('Score', 0, -RY + 32, UI_FONT, 2);
     // 大数字：漫画字体，黄字 + 粗黑描边 + 红色错位
     const shown = Math.round(score * Math.min(1, t / 0.7));          // 数字滚动上来
     const pop = t > 0.7 && t < 0.95 ? 1 + 0.15 * Math.sin((t - 0.7) / 0.25 * Math.PI) : 1;
-    ctx.save(); ctx.translate(0, 14); ctx.scale(pop, pop);
-    ctx.font = `80px ${POP_FONT}`; ctx.lineJoin = 'round';
+    ctx.save(); ctx.translate(0, 4); ctx.scale(pop, pop);
+    ctx.font = `72px ${POP_FONT}`; ctx.lineJoin = 'round';
     ctx.lineWidth = 9; ctx.strokeStyle = POP.K;
     ctx.fillStyle = POP.R; ctx.strokeText(String(shown), 5, 5); ctx.fillText(String(shown), 5, 5);
     ctx.strokeText(String(shown), 0, 0); ctx.fillStyle = POP.Y; ctx.fillText(String(shown), 0, 0);
     ctx.restore();
+    // 数字下面一笔红色手绘下划线（随数字滚动画出来）
+    {
+      const k = Math.min(1, Math.max(0, (t - 0.3) / 0.5));
+      if (k > 0) {
+        ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = '#FE2C55';
+        ctx.beginPath();
+        for (let i = 0; i <= 20 * k; i++) { const u = i / 20, x = -50 + 100 * u, y = 40 + 5 * Math.sin(u * Math.PI) - 4 * u; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+        ctx.stroke(); ctx.restore();
+      }
+    }
+    // 小标签：黄底黑框
+    {
+      const cap = mode === 'sing' ? 'out of 3 catches' : 'emoji bounces';
+      ctx.save(); ctx.translate(0, 58); ctx.rotate(0.03);
+      ctx.font = 'italic 800 11px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif';
+      const w = ctx.measureText(cap).width + 18;
+      rr(-w / 2, -10, w, 20, 10); ctx.fillStyle = POP.Y; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = POP.K; ctx.stroke();
+      ctx.fillStyle = POP.K; ctx.fillText(cap, 0, 0.5);
+      ctx.restore();
+    }
+    // 两颗一闪一闪的小星星
+    [[RX * 0.98, RY * 0.62, 20, 0, 0], [RX * 1.12, RY * 0.1, 12, 1, 1.7]].forEach(([x, y, z, i, ph]) => {
+      const st = starImgs[i];
+      if (!st.naturalWidth) return;
+      const k = 0.75 + 0.25 * Math.sin(now / 220 + ph);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(now / 1600 + ph); ctx.scale(k, k);
+      ctx.drawImage(st, -z / 2, -z / 2, z, z); ctx.restore();
+    });
     const im = faces[faceIdx];                          // 表情趴在卡片顶上，轻轻上下晃
     if (im.naturalWidth) {
       const sc = 62 / Math.max(im.naturalWidth, im.naturalHeight);
