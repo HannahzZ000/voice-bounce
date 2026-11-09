@@ -1350,16 +1350,48 @@
     ctx.save();
     ctx.globalAlpha = Math.min(1, t / 0.15);
     ctx.translate(cx, cy); ctx.scale(e, e);
-    ctx.fillStyle = 'rgba(0,0,0,.55)';
-    rr(-cw / 2, -ch / 2, cw, ch, 16); ctx.fill();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
-    ctx.font = FONT;                                   // 和倒计时提示框同样的字体
-    ctx.fillText('Score', 0, -ch / 2 + 50);
+    ctx.rotate(-0.035);                                // 波普漫画框：微微歪一点
+    const R0 = 14;
+    // 1) 品红硬阴影 + 黑描边
+    ctx.save(); ctx.translate(9, 9);
+    rr(-cw / 2, -ch / 2, cw, ch, R0); ctx.fillStyle = POP.M; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = POP.K; ctx.stroke();
+    ctx.restore();
+    // 2) 黄底 + 白色放射光芒 + 橙色网点
+    rr(-cw / 2, -ch / 2, cw, ch, R0); ctx.fillStyle = POP.Y; ctx.fill();
+    ctx.save();
+    rr(-cw / 2, -ch / 2, cw, ch, R0); ctx.clip();
+    ctx.save(); ctx.translate(0, 18); ctx.rotate(now / 6000);
+    ctx.fillStyle = 'rgba(255,255,255,.45)';
+    for (let i = 0; i < 16; i++) {
+      const a = i / 16 * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 260, a, a + Math.PI / 16); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = dotPattern('rgba(255,140,0,.38)'); ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+    ctx.restore();
+    // 3) 粗黑外框 + 细黑内框（漫画格子的双线）
+    rr(-cw / 2, -ch / 2, cw, ch, R0); ctx.lineWidth = 4.5; ctx.strokeStyle = POP.K; ctx.stroke();
+    rr(-cw / 2 + 8, -ch / 2 + 8, cw - 16, ch - 16, R0 - 6); ctx.lineWidth = 1.6; ctx.stroke();
+    // 4) Score 标签：白底黑框小牌子（字体和倒计时提示一致）
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = FONT;
+    const lw = ctx.measureText('Score').width + 26, ly = -ch / 2 + 46;
+    ctx.save(); ctx.rotate(0.05);
+    rr(-lw / 2 + 3, ly - 13 + 3, lw, 26, 13); ctx.fillStyle = POP.K; ctx.fill();
+    rr(-lw / 2, ly - 13, lw, 26, 13); ctx.fillStyle = POP.W; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = POP.K; ctx.stroke();
+    ctx.fillStyle = POP.K; ctx.fillText('Score', 0, ly + 0.5);
+    ctx.restore();
+    // 5) 大数字：漫画字体 + 黑粗描边 + 青色错位 + 白字
     const shown = Math.round(score * Math.min(1, t / 0.7));          // 数字滚动上来
     const pop = t > 0.7 && t < 0.95 ? 1 + 0.15 * Math.sin((t - 0.7) / 0.25 * Math.PI) : 1;
-    ctx.save(); ctx.scale(pop, pop);
-    ctx.font = '800 60px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-    ctx.fillText(String(shown), 0, (-ch / 2 + 106) / pop);
+    ctx.save(); ctx.translate(0, -ch / 2 + 112); ctx.scale(pop, pop);
+    ctx.font = `76px ${POP_FONT}`; ctx.lineJoin = 'round';
+    ctx.lineWidth = 9; ctx.strokeStyle = POP.K;
+    ctx.fillStyle = POP.C; ctx.strokeText(String(shown), 5, 5); ctx.fillText(String(shown), 5, 5);
+    ctx.strokeText(String(shown), 0, 0); ctx.fillStyle = POP.W; ctx.fillText(String(shown), 0, 0);
     ctx.restore();
     const im = faces[faceIdx];                          // 表情趴在卡片顶上，轻轻上下晃
     if (im.naturalWidth) {
