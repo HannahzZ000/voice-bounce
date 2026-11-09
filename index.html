@@ -704,11 +704,11 @@
   const SING_BPM = 100, SING_HOLD_MS = 600, SING_PADDLE_MUL = 1.4;
   const HIT_GRACE = 0.3;             // 落拍后还允许板子赶到的时间（抵消麦克风识别延迟）
   const HIT_TOL = 0.8;               // 判定宽度：板子半宽 + 表情半径 × 这个系数
-  // 第一句只跟唱热身；从第二句起每小节第一拍落一次球：birth / you / birth / friend / birth / you
-  const HIT_BEATS = [7, 10, 13, 16, 19, 22];
+  // 只在 "you" 上落到板子：第一句、第二句、第四句的 you（第三句结尾是 friend，不落）
+  const HIT_BEATS = [4, 10, 22];
+  const HOP_H = 42, RISE_H = 70, DROP_H = 22;   // 空中小跳 / 接住后弹起 / 落向板子前的小抛起 的高度
   const SING_MIN_SPAN = 7;           // 音域至少按这么多半音铺满
-  const BEATS_PER_HIT = 3;           // 每 3 拍（一小节）落一次球
-  const VERSE_BEATS = 24, SING_HITS = 6, SONG_END_BEAT = 25;
+  const VERSE_BEATS = 24, SING_HITS = 3, SONG_END_BEAT = 25;
   // Happy Birthday（公有领域），F 大调 3/4 拍；[音节, 起始拍, 连接符]
   const SYL = [
     ['Hap', 0, '-'], ['py', 0.75, ' '], ['birth', 1, '-'], ['day', 2, ' '], ['to', 3, ' '], ['you', 4, ''],
@@ -912,7 +912,7 @@
 
   // 音域：不用单独校准。用上次的；第一次玩就从声控模式的中心音估一个，边唱边自动调整
   function newSingRound() {
-    hitK = 0; targets = []; results = []; singSamples = []; sinkers = []; lastRangeT = performance.now();
+    hitK = 0; targets = []; results = []; singSamples = []; sinkers = []; lastRangeT = performance.now(); hopKey = '';
     if (!hasSingCalib) {
       const c = baseReady ? centerLog : Math.log2(220);
       singLo = c - 4.5 / 12; singHi = c + 4.5 / 12;
@@ -936,7 +936,8 @@
     hasSingCalib = true;
     store.set('vb_sing_lo', String(singLo)); store.set('vb_sing_hi', String(singHi));
   }
-  const hitGb = k => k < SING_HITS ? HIT_BEATS[k] : HIT_BEATS[SING_HITS - 1] + BEATS_PER_HIT;
+  const hitGb = k => k < SING_HITS ? HIT_BEATS[k] : SONG_END_BEAT + 4;
+  const floorY = () => yHit() - 190;                 // 空中跳动时那层"看不见的地面"
   const yHit = () => PAD_Y - R;
   function targetX(k) {
     if (k >= SING_HITS) return W / 2;                  // 唱完最后一下，球落回中间
@@ -979,22 +980,28 @@
         else if (t >= tk + HIT_GRACE) { singMiss(x, now); return; }
       }
     }
-    // 球的位置完全由节拍时钟算出来，保证每次都正好在拍点落到板子线上
-    const kk = hitK, tNext = beatTime(hitGb(kk)), tPrev = beatTime(hitGb(kk) - BEATS_PER_HIT), xNext = targetX(kk);
-    if (t >= tNext) { bx = xNext; by = yHit(); }
-    else if (kk === 0) {                               // 开局：从上面掉下来
-      if (t < tPrev) { bx = W / 2; by = restY(); }
-      else {
-        const sP = Math.min(1, (t - tPrev) / (tNext - tPrev));
-        bx = W / 2 + (xNext - W / 2) * sP;
-        by = 190 + (yHit() - 190) * sP * sP;
-      }
-    } else {                                           // 正常弹跳：抛物线，落点 = 下一个目标
-      const sP = Math.max(0, Math.min(1, (t - tPrev) / (tNext - tPrev)));
-      const x0 = targetX(kk - 1);
-      bx = x0 + (xNext - x0) * sP;
-      by = yHit() - 4 * (694 * 0.42) * sP * (1 - sP);
-    }
+    singBall(gb);
+  }
+  // 球的位置完全由节拍时钟算出来：平时在空中每拍跳一下，往下一个落点挪；只在 "you" 那一拍落到板子上
+  let hopKey = '';
+  function singBall(gb) {
+    const fl = floorY();
+    if (gb < 0) { bx = W / 2; by = fl + Math.sin(performance.now() / 300) * 6; return; }
+    const k = hitK;
+    const A = k === 0 ? 0 : HIT_BEATS[k - 1], B = hitGb(k);
+    const xA = k === 0 ? W / 2 : targetX(k - 1), xB = targetX(k);
+    if (gb >= B) { bx = xB; by = yHit(); return; }      // 落拍后的宽限时间：停在板子线上
+    const g = Math.max(gb, A);                          // 提前一点判定接住时，从板子上开始弹起
+    const u = Math.min(1, (g - A) / (B - A)), e = u * u * (3 - 2 * u);
+    bx = xA + (xB - xA) * e;
+    const i = Math.floor(g - A), f = (g - A) - i;
+    const arc = (y0, y1, h, sP) => y0 + (y1 - y0) * sP - 4 * h * sP * (1 - sP);
+    let phase;
+    if (k > 0 && i === 0) { by = arc(yHit(), fl, RISE_H, f); phase = 'rise'; }        // 接住后弹回空中
+    else if (k < SING_HITS && gb >= B - 1) { by = arc(fl, yHit(), DROP_H, f); phase = 'drop'; }   // 唱到 you：落向板子
+    else { by = arc(fl, fl, HOP_H, f); phase = 'hop'; }                               // 空中自由小跳
+    const key = k + ':' + i;
+    if (key !== hopKey) { if (hopKey && phase !== 'rise') squash = Math.max(squash, 0.45); hopKey = key; }   // 每次空中落脚 Q 弹一下
   }
   function updateSinkers(dt, now) {}
   function drawSinkers(now) {}
