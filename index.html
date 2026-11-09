@@ -1244,39 +1244,49 @@
     return (halftoneCache[key] = c);
   }
 
+  // 特效等级：一开始很简单，连击越多越复杂
+  // 0：冲击环 + 小黄网点 + 少量纸屑星星　1：+品红网点、速度线、套色残影　2：+POW! 爆炸字　3：全开
+  function fxLevel() {
+    if (mode === 'sing') return [0, 0, 1, 3][Math.min(3, score)];   // 唱歌只有 3 下：第三下（最后一个 you）全开
+    return score <= 2 ? 0 : score <= 5 ? 1 : score <= 9 ? 2 : 3;
+  }
   function impact(x, y, oldFace) {
-    const p = Math.min(1, score / 25);                 // 连击越多越炸
+    const L = fxLevel(), p = Math.min(1, score / 25);
     fx.x = x; fx.y = y;
     fx.glow = 1; fx.pad = 1;
-    fx.shake = 0.55 + 0.5 * p;
-    fx.dots.push({ t: 0, x, y: y - 8, c: POP.M, max: 1.15 + 0.4 * p }, { t: -0.05, x, y: y - 8, c: POP.Y, max: 0.75 + 0.3 * p });
-    fx.lines = { t: 0, rot: Math.random() * Math.PI, n: 16 + Math.round(p * 8), len: 60 + 50 * p };
-    fx.rings.push({ t: 0, max: 100 + 50 * p });
-    // POW! 爆炸字：左右交替出现在表情旁边
-    fx.side = -fx.side;
-    let word; do { word = POP_WORDS[Math.floor(Math.random() * POP_WORDS.length)]; } while (word === fx.lastWord);
-    fx.lastWord = word;
-    const n = 12, r0 = 44 + 14 * p, spikes = [];
-    for (let i = 0; i < n * 2; i++) spikes.push(i % 2 ? r0 * (0.62 + Math.random() * 0.08) : r0 * (0.95 + Math.random() * 0.25));
-    fx.bursts = [{ t: 0, word, spikes, r0, rot: (Math.random() - 0.5) * 0.45,
-      x: Math.max(70, Math.min(W - 70, x + fx.side * (70 + Math.random() * 20))), y: y - 110 - Math.random() * 25 }];
+    fx.shake = [0.3, 0.45, 0.6, 0.8][L] + 0.25 * p;
+    fx.rings.push({ t: 0, max: [70, 90, 105, 125][L] + 30 * p });
+    fx.dots.push({ t: -0.03, x, y: y - 8, c: POP.Y, max: [0.45, 0.7, 0.8, 1.0][L] + 0.2 * p });
+    if (L >= 1) {
+      fx.dots.push({ t: 0, x, y: y - 8, c: POP.M, max: [0, 0.9, 1.15, 1.4][L] + 0.3 * p });
+      fx.lines = { t: 0, rot: Math.random() * Math.PI, n: [0, 10, 14, 20][L], len: [0, 40, 55, 75][L] + 30 * p };
+      fx.ghosts.push({ i: oldFace, x: bx, y: by, t: 0 });
+    }
+    if (L >= 2) {                                      // POW! 爆炸字：左右交替出现在表情旁边
+      fx.side = -fx.side;
+      let word; do { word = POP_WORDS[Math.floor(Math.random() * POP_WORDS.length)]; } while (word === fx.lastWord);
+      fx.lastWord = word;
+      const n = 12, r0 = (L === 2 ? 36 : 46) + 12 * p, spikes = [];
+      for (let i = 0; i < n * 2; i++) spikes.push(i % 2 ? r0 * (0.62 + Math.random() * 0.08) : r0 * (0.95 + Math.random() * 0.25));
+      fx.bursts = [{ t: 0, word, spikes, r0, rot: (Math.random() - 0.5) * 0.45,
+        x: Math.max(70, Math.min(W - 70, x + fx.side * (70 + Math.random() * 20))), y: y - 110 - Math.random() * 25 }];
+    }
     // 撞色纸屑：三角 / 方块 / 圆点 / 闪电，黑色描边
-    const cols = [POP.Y, POP.M, POP.C, POP.W, POP.R];
-    for (let i = 0, nc = 16 + Math.round(p * 14); i < nc; i++) {
+    const cols = L === 0 ? [POP.Y, POP.W] : [POP.Y, POP.M, POP.C, POP.W, POP.R];
+    for (let i = 0, nc = [6, 11, 16, 24][L] + Math.round(p * 8); i < nc; i++) {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
-      const sp = 250 + Math.random() * (320 + 200 * p);
+      const sp = 220 + Math.random() * (260 + 70 * L + 150 * p);
       fx.confetti.push({ x, y: y - 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 16,
-        size: 5 + Math.random() * 5, shape: i % 4, c: cols[i % cols.length], life: 1, decay: 1.1 + Math.random() * 0.6 });
+        size: 4.5 + Math.random() * (3 + L), shape: L === 0 ? (i % 2) * 2 : i % 4, c: cols[i % cols.length], life: 1, decay: 1.1 + Math.random() * 0.6 });
     }
     // 设计稿里的两种小星星
-    for (let i = 0, n2 = 8 + Math.round(p * 6); i < n2; i++) {
+    for (let i = 0, n2 = [3, 5, 8, 12][L] + Math.round(p * 4); i < n2; i++) {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.35;
       const sp = 120 + Math.random() * 230;
       fx.stars.push({ x, y: y - 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, delay: Math.random() * 0.08,
         life: 0.55 + Math.random() * 0.35, size: 6 + Math.random() * 8, rot: Math.random() * Math.PI,
         spin: (Math.random() - 0.5) * 10, tw: Math.random() * Math.PI * 2, img: starImgs[i % 2] });
     }
-    fx.ghosts.push({ i: oldFace, x: bx, y: by, t: 0 });
   }
 
   function updateFx(dt) {
