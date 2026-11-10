@@ -1055,22 +1055,33 @@
       for (let i = 0; i < 6; i++) if (syl[i][1] <= h) idx = i;
       hitIdx.push(idx);
     }
+    // 和其他文字统一：Poppins 粗斜体 + 黑描边；没唱到是白色，唱到的从左到右刷成黄色
+    const LF = 'italic 800 22px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif', SUNG = '#FFE600';
     ctx.save();
-    ctx.font = '800 24px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 6;
+    ctx.font = LF; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.lineJoin = 'round'; ctx.miterLimit = 2;
     const parts = syl.map(sy => sy[0] + sy[2]);
     const widths = parts.map(pt => ctx.measureText(pt).width);
     let x = W / 2 - widths.reduce((a, c) => a + c, 0) / 2;
     const y = 96;
     for (let i = 0; i < 6; i++) {
-      ctx.fillStyle = i === cur ? GOLD : (i < cur ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.55)');
-      ctx.fillText(parts[i], x, y);
-      if (hitIdx.includes(i)) {
-        const w = ctx.measureText(syl[i][0]).width;
-        ctx.beginPath(); ctx.arc(x + w / 2, y + 20, 3.5, 0, Math.PI * 2); ctx.fill();
+      // 这个音节唱了多少（0~1）：当前音节按时长从左往右推进
+      const st = syl[i][1], en = i < 5 ? syl[i + 1][1] : st + 1;
+      const f = gb < 0 ? 0 : Math.max(0, Math.min(1, (b - st) / Math.max(0.25, Math.min(1, en - st))));
+      const w = widths[i];
+      ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(parts[i], x, y);
+      ctx.fillStyle = '#fff'; ctx.fillText(parts[i], x, y);
+      if (f > 0) {
+        ctx.save(); ctx.beginPath(); ctx.rect(x - 4, y - 20, (w + 4) * f + 4, 40); ctx.clip();
+        ctx.fillStyle = SUNG; ctx.fillText(parts[i], x, y); ctx.restore();
       }
-      x += widths[i];
+      if (hitIdx.includes(i)) {                        // “you” 下面的小圆点：落点提示
+        const sw = ctx.measureText(syl[i][0]).width;
+        ctx.beginPath(); ctx.arc(x + sw / 2, y + 21, 4, 0, Math.PI * 2);
+        ctx.fillStyle = f > 0 ? SUNG : '#fff'; ctx.fill();
+        ctx.lineWidth = 2; ctx.stroke();
+      }
+      x += w;
     }
     ctx.restore();
   }
