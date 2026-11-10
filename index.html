@@ -249,7 +249,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
   // 中心音高：不再单独校准。有保存过就直接用；没有的话，你发出的第一声就是中心，之后边玩边慢慢自适应
-  let centerLog = parseFloat(store.get('vb_center', ''));
+  let centerLog = parseFloat(store.get('vb_center2', ''));
   let baseReady = isFinite(centerLog);
   if (!baseReady) centerLog = Math.log2(200);
   const firstSamples = [], adaptBuf = [];
@@ -260,7 +260,7 @@
       firstSamples.push(lf);
       if (firstSamples.length >= 12) {
         centerLog = median(firstSamples); baseReady = true;
-        store.set('vb_center', String(centerLog));
+        store.set('vb_center2', String(centerLog));
       }
       return;
     }
@@ -274,7 +274,7 @@
       if ((hi - lo) * 12 >= 3) {                          // 至少高低都试过了才调整
         const target = lo + (RANGE.down - 0.7) / 12;
         centerLog += (target - centerLog) * 0.06;         // 每秒只挪一点点，不会突然跳
-        store.set('vb_center', String(centerLog));
+        store.set('vb_center2', String(centerLog));
       }
     }
   }
