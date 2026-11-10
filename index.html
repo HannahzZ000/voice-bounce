@@ -1303,11 +1303,11 @@
     const head = (hx) => { ctx.beginPath(); ctx.ellipse(hx, 0, 5.5, 4, -0.4, 0, Math.PI * 2); ctx.fillStyle = n.c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = BAND.K; ctx.stroke(); };
     ctx.strokeStyle = BAND.K; ctx.lineWidth = 2.4;
     if (n.dbl) {
-      ctx.beginPath(); ctx.moveTo(4.5, -1); ctx.lineTo(4.5, -20); ctx.lineTo(18.5, -24); ctx.lineTo(18.5, -5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4.6, 1.5); ctx.lineTo(4.6, -20); ctx.lineTo(18.6, -24); ctx.lineTo(18.6, 1.5); ctx.stroke();   // 符杆伸进符头里，接缝被符头盖住
       ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(4.5, -19); ctx.lineTo(18.5, -23); ctx.stroke();
       head(0); head(14);
     } else {
-      ctx.beginPath(); ctx.moveTo(4.5, -1); ctx.lineTo(4.5, -21); ctx.quadraticCurveTo(12, -16, 11, -8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4.6, 1.5); ctx.lineTo(4.6, -21); ctx.quadraticCurveTo(12, -16, 11, -8); ctx.stroke();
       head(0);
     }
     ctx.restore();
