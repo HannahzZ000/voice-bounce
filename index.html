@@ -268,8 +268,14 @@
     if (adaptBuf.length > 1200) adaptBuf.shift();          // 最近约 20 秒的出声
     if (now - lastAdaptT > 1000 && adaptBuf.length > 180) {
       lastAdaptT = now;
-      centerLog += (median(adaptBuf) - centerLog) * 0.08;  // 每秒只挪一点点，不会突然跳
-      store.set('vb_center', String(centerLog));
+      // 用你最近的“低音”（10% 分位）来对齐左端：高音唱得多也不会把中心往上拽，低音始终够得到最左边
+      const b = adaptBuf.slice().sort((x, y) => x - y);
+      const lo = b[Math.floor(b.length * 0.1)], hi = b[Math.floor(b.length * 0.9)];
+      if ((hi - lo) * 12 >= 3) {                          // 至少高低都试过了才调整
+        const target = lo + (RANGE.down - 0.7) / 12;
+        centerLog += (target - centerLog) * 0.06;         // 每秒只挪一点点，不会突然跳
+        store.set('vb_center', String(centerLog));
+      }
     }
   }
 
@@ -334,7 +340,7 @@
       let raw = Math.log2(f);
       if (mode === 'voice' && baseReady) {
         while (raw - centerLog > (RANGE.up + 3) / 12) raw -= 1;
-        while (centerLog - raw > (RANGE.down + 4) / 12) raw += 1;
+        while (centerLog - raw > (RANGE.down + 12) / 12) raw += 1;   // 低到离谱才当作八度误判
       } else if (singReady()) {
         const c = (singLo + singHi) / 2, h = (singHi - singLo) / 2 + 5 / 12;
         while (raw - c > h) raw -= 1;
@@ -342,9 +348,11 @@
       }
       if (smoothLog !== null) {
         const dd = raw - smoothLog;
-        if (Math.abs(Math.abs(dd) - 1) < 0.12) { if (++octFrames < 10) raw -= Math.sign(dd); }
+        const inRange = mode === 'voice' && baseReady &&
+          (raw - centerLog) * 12 <= RANGE.up + 2 && (centerLog - raw) * 12 <= RANGE.down + 6;
+        if (!inRange && Math.abs(Math.abs(dd) - 1) < 0.12) { if (++octFrames < 10) raw -= Math.sign(dd); }
         else octFrames = 0;
-        if (Math.abs(raw - smoothLog) > 0.5) { if (++jumpFrames < 3) return; }
+        if (Math.abs(raw - smoothLog) > 0.5) { if (++jumpFrames < 2) return; }
         else jumpFrames = 0;
       }
       pitchHist.push(raw);
