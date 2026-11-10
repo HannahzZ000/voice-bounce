@@ -252,7 +252,7 @@
   let centerLog = parseFloat(store.get('vb_center2', ''));
   let baseReady = isFinite(centerLog);
   if (!baseReady) centerLog = Math.log2(200);
-  const firstSamples = [], adaptBuf = [];
+  const firstSamples = [], adaptBuf = [], stableWin = [];
   let lastAdaptT = 0;
   const median = a => { const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
   function adaptCenter(lf, now) {
@@ -264,13 +264,16 @@
       }
       return;
     }
+    // 只学“唱稳了”的音：起音、滑音、收尾往下掉的那一截都不算，不然低端被拖得太低，真正的低音到不了最左
+    stableWin.push(lf); if (stableWin.length > 6) stableWin.shift();
+    if (stableWin.length < 6 || (Math.max(...stableWin) - Math.min(...stableWin)) * 12 > 0.6) return;
     adaptBuf.push(lf);
     if (adaptBuf.length > 1200) adaptBuf.shift();          // 最近约 20 秒的出声
-    if (now - lastAdaptT > 1000 && adaptBuf.length > 180) {
+    if (now - lastAdaptT > 1000 && adaptBuf.length > 120) {
       lastAdaptT = now;
       // 用你最近的“低音”（10% 分位）来对齐左端：高音唱得多也不会把中心往上拽，低音始终够得到最左边
       const b = adaptBuf.slice().sort((x, y) => x - y);
-      const lo = b[Math.floor(b.length * 0.1)], hi = b[Math.floor(b.length * 0.9)];
+      const lo = b[Math.floor(b.length * 0.15)], hi = b[Math.floor(b.length * 0.9)];
       if ((hi - lo) * 12 >= 3) {                          // 至少高低都试过了才调整
         const target = lo + (RANGE.down - 0.7) / 12;
         centerLog += (target - centerLog) * 0.06;         // 每秒只挪一点点，不会突然跳
@@ -324,7 +327,7 @@
 
   function resetPitch() {
     pitchHz = -1; smoothLog = null; paddleT = null;
-    pitchHist.length = 0; oe.x = null; jumpFrames = 0; octFrames = 0;
+    pitchHist.length = 0; oe.x = null; jumpFrames = 0; octFrames = 0; stableWin.length = 0;
   }
 
   function updatePitch(now) {
@@ -334,7 +337,6 @@
     const dt = Math.max(0.005, Math.min(0.05, (now - lastPitchT) / 1000));
     lastPitchT = now;
     if (f > 0 && f < 1500) {
-      if (now < sfxHoldUntil) { lastVoiceT = now; return; }   // 音效刚响：外放漏进麦克风，这几帧不信
       // 唱歌模式：这个音高正好是伴奏此刻在响的音，多半是外放漏进麦克风，跳过
       if (mode === 'sing' && song && accMasked(f)) { lastVoiceT = now; return; }   // 板子保持不动
       lastVoiceT = now;
@@ -571,7 +573,6 @@
 
   // ---- 音效：接住 = pop，掉海里 = splash（也录进视频） ----
   const SFX = {};
-  let sfxHoldUntil = 0;
   function loadSfx() {
     ['pop', 'splash'].forEach(n => {
       fetch('assets/sfx/' + n + '.mp3').then(r => r.arrayBuffer())
@@ -587,7 +588,6 @@
     src.connect(g); g.connect(audioCtx.destination);
     if (recDest) g.connect(recDest);
     src.start();
-    sfxHoldUntil = performance.now() + b.duration / (rate || 1) * 1000 + 60;
   }
 
   function unlockAudio() {
@@ -1953,6 +1953,24 @@
   }
   // 顶部实时记分板：奶白胶囊 + 黑描边 + 蓝色错位阴影，得分时弹一下
   let hudScore = -1, hudPopAt = 0;
+  // ?debug：左上角显示实时音高，方便排查“低音够不到左边”
+  const DEBUG = /[?&]debug\b/.test(location.search);
+  const dbgTrail = [];
+  function drawDebug() {
+    const semi = pitchHz > 0 ? (Math.log2(pitchHz) - centerLog) * 12 : null;
+    dbgTrail.push(semi); if (dbgTrail.length > 180) dbgTrail.shift();
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(8, 90, 200, 120);
+    ctx.fillStyle = '#fff'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`Hz ${pitchHz > 0 ? pitchHz.toFixed(0) : '-'}  semi ${semi === null ? '-' : semi.toFixed(1)}`, 14, 106);
+    ctx.fillText(`center ${Math.pow(2, centerLog).toFixed(0)}Hz  t ${paddleT === null ? '-' : paddleT.toFixed(2)}`, 14, 122);
+    // 轨迹：上 = 高（+11），下 = 低（-3.5）
+    const y0 = 132, h = 72, yOf = v => y0 + h * (RANGE.up - Math.max(-RANGE.down - 2, Math.min(RANGE.up + 2, v))) / (RANGE.up + RANGE.down + 4);
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.moveTo(14, yOf(0)); ctx.lineTo(202, yOf(0)); ctx.stroke();
+    ctx.strokeStyle = '#25F4EE'; ctx.beginPath(); let pen = false;
+    dbgTrail.forEach((v, i) => { const x = 14 + i * (188 / 180); if (v === null) { pen = false; return; } pen ? ctx.lineTo(x, yOf(v)) : ctx.moveTo(x, yOf(v)); pen = true; });
+    ctx.stroke(); ctx.restore();
+  }
   function drawHud(now) {
     if (!['countdown', 'play', 'sink', 'sing'].includes(state)) { hudScore = -1; return; }
     if (score !== hudScore) { if (hudScore >= 0 && score > hudScore) hudPopAt = now; hudScore = score; }
@@ -2058,6 +2076,7 @@
     drawSplashFx(tw);
     drawFxFront();
     if (screen === 'rec') drawHud(now);                 // 顶部实时记分板
+    if (DEBUG) drawDebug();
     if (state === 'result') drawResult(now);
     // Retry 按钮：结算气泡出现后从气泡下面弹出来
     const showRetry = state === 'result' && now - resultAt > 900;
