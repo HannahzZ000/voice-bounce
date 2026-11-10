@@ -1820,6 +1820,57 @@
     ctx.restore();
   }
 
+  // 屏幕上角的波普网点：从角落往里越来越小，范围很小
+  const cornerCache = {};
+  function cornerDots(color) {
+    if (cornerCache[color]) return cornerCache[color];
+    const R = 120, sc = 3, c = document.createElement('canvas');
+    c.width = c.height = R * sc;
+    const g = c.getContext('2d');
+    g.scale(sc, sc); g.fillStyle = color;
+    for (let y = 2, row = 0; y <= R; y += 6.5, row++) for (let x = 2 + (row % 2 ? 3.75 : 0); x <= R; x += 7.5) {
+      const d = Math.hypot(x, y * 1.15) / R;
+      const r = 2.7 * Math.pow(Math.max(0, 1 - d), 0.9);
+      if (r < 0.35) continue;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    return (cornerCache[color] = c);
+  }
+  function drawCorners() {
+    const R = 120;
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.drawImage(cornerDots('#FF2E93'), 0, 0, R, R);
+    ctx.translate(W, 0); ctx.scale(-1, 1);
+    ctx.drawImage(cornerDots('#25F4EE'), 0, 0, R, R);
+    ctx.restore();
+  }
+  // 顶部实时记分板：奶白胶囊 + 黑描边 + 蓝色错位阴影，得分时弹一下
+  let hudScore = -1, hudPopAt = 0;
+  function drawHud(now) {
+    if (!['countdown', 'play', 'sink', 'sing'].includes(state)) { hudScore = -1; return; }
+    if (score !== hudScore) { if (hudScore >= 0 && score > hudScore) hudPopAt = now; hudScore = score; }
+    const pop = 1 + 0.28 * Math.exp(-(now - hudPopAt) / 110) * (now - hudPopAt < 600 ? 1 : 0);
+    const num = String(score);
+    ctx.save();
+    ctx.font = `30px ${POP_FONT}`;
+    const nw = ctx.measureText(num).width;
+    ctx.font = 'italic 800 14px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif';
+    const lw = ctx.measureText('Score').width;
+    const w = 18 + lw + 10 + nw + 18, h = 40, x0 = -w / 2, y0 = -h / 2;
+    ctx.translate(195, 46); ctx.rotate(-0.03); ctx.scale(pop, pop);
+    rr(x0 + 4, y0 + 4, w, h, h / 2); ctx.fillStyle = '#2F6BFF'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = POP.K; ctx.stroke();
+    rr(x0, y0, w, h, h / 2); ctx.fillStyle = '#FFFBEA'; ctx.fill(); ctx.stroke();
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    outlineText('Score', x0 + 18, 1, 'italic 800 14px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif', 2);
+    const nx = x0 + 18 + lw + 10;
+    ctx.font = `30px ${POP_FONT}`; ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = POP.K;
+    ctx.fillStyle = POP.R; ctx.strokeText(num, nx + 2.5, 3.5); ctx.fillText(num, nx + 2.5, 3.5);
+    ctx.strokeText(num, nx, 1); ctx.fillStyle = POP.Y; ctx.fillText(num, nx, 1);
+    ctx.restore();
+  }
+
   function draw(now) {
     const k = S * DPR;
     ctx.setTransform(k, 0, 0, k, 0, 0);
@@ -1836,6 +1887,7 @@
     }
 
     const tw = now / 1000;
+    drawCorners();                                     // 上角波普网点（最底层）
     if (mode === 'sing') drawBand(now);                 // 唱歌版：波普乐队舞台
     else { drawWave(0, tw); drawWave(1, tw); }          // 声控版：波普海浪
 
@@ -1899,6 +1951,7 @@
     else drawWave(2, tw);                               // 最前面一层浪盖住沉下去的表情
     drawSplashFx(tw);
     drawFxFront();
+    if (screen === 'rec') drawHud(now);                 // 顶部实时记分板
     if (state === 'result') drawResult(now);
     // Retry 按钮：结算气泡出现后从气泡下面弹出来
     const showRetry = state === 'result' && now - resultAt > 900;
