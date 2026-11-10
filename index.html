@@ -67,6 +67,11 @@
     background: url(assets/avatar.jpg?v=3) center/cover; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #20D5EC;
   }
   #nextBtn { left: 199px; width: 179px; background: #FE2C55; color: #fff; }
+  /* 手机横屏：提示竖过来（电脑上的宽窗口不提示） */
+  #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #000; color: #fff;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px; font: 600 17px -apple-system, sans-serif; }
+  #rotate b { font: italic 800 26px Poppins, sans-serif; color: #FFE600; -webkit-text-stroke: 1px #111; }
+  @media (orientation: landscape) and (pointer: coarse) and (max-height: 520px) { #rotate { display: flex; } }
   #err {
     position: absolute; left: 40px; right: 40px; top: 300px; display: none;
     color: #fff; font-size: 14px; font-weight: 600; line-height: 1.5; text-align: center;
@@ -75,6 +80,7 @@
 </style>
 </head>
 <body>
+<div id="rotate"><b>Turn your phone upright</b><span>Voice Bounce plays in portrait</span></div>
 <video id="cam" playsinline muted autoplay></video>
 <video id="playback" playsinline loop></video>
 <div id="stage">
@@ -178,7 +184,7 @@
   // =====================================================================
   const $ = s => document.querySelector(s);
   const stage = $('#stage'), cam = $('#cam'), playback = $('#playback'), retryBtn = $('#retryBtn');
-  retryBtn.addEventListener('click', e => { e.stopPropagation(); actions.retry(); });
+  retryBtn.addEventListener('click', e => { e.stopPropagation(); if (performance.now() - screenAt >= 400) actions.retry(); });
   const cv = $('#game'), ctx = cv.getContext('2d');
   const timerEl = $('#timer'), arcEl = $('#arc'), recUI = $('#recUI'), errEl = $('#err');
 
@@ -446,7 +452,8 @@
       try { await at.applyConstraints(audioC); } catch {}
       connectMic(at, false);
     }
-    if (!micOK) throw new Error('Microphone access is needed to move the paddle with your voice. Allow it in settings and reload.');
+    if (!micOK) throw new Error('Microphone is off, so your voice can\'t move the paddle. Allow microphone access in settings and reload. For now you can drag the paddle with your finger.');
+    if (!videoStream) throw new Error('Camera is off. Allow camera access in settings and reload to see yourself in the video. The game still works.');
   }
 
   function connectMic(track, aec) {
@@ -530,8 +537,9 @@
   // 界面流程：panel（特效面板）→ camera（拍摄页）→ rec（录制中）⇄ paused → feed（成片）
   // =====================================================================
   let screen = 'panel';
+  let screenAt = 0;                 // 换页时间：换页后 400ms 内的点击当作“同一下点击的残影”忽略
   function setScreen(s) {
-    screen = s;
+    screen = s; screenAt = performance.now();
     for (const id in OV) $('#ov-' + id).style.display = $('#ov-' + id + '-b').style.display = id === s ? 'block' : 'none';
     tabs.style.display = s === 'camera' ? 'block' : 'none';
     $('#carousel').style.display = s === 'camera' ? 'block' : 'none';
@@ -579,8 +587,12 @@
     discard() { discardTake(); setScreen('camera'); },
     togglePlay() { if (playback.paused) playback.play().catch(() => {}); else playback.pause(); },
   };
+  // 手机上一次点按会先触发 pointerup 再补发 click：点中间圆开始录制后，补发的 click 会落在刚出现的“停止”键上，录制立刻停掉。
+  // 所以换页后 400ms 内的点击一律忽略
+  const ghost = () => performance.now() - screenAt < 400;
   document.querySelectorAll('.hp').forEach(b => b.addEventListener('click', e => {
     e.stopPropagation();
+    if (ghost()) return;
     const f = actions[b.dataset.a];
     if (f) f();
   }));
@@ -2133,8 +2145,9 @@
   const mediaReady = initMedia().catch(e => {
     errEl.textContent = e.message || String(e);
     errEl.style.display = 'block';
-    setTimeout(() => { errEl.style.display = 'none'; }, 6000);
+    setTimeout(() => { errEl.style.display = 'none'; }, 7000);
   });
+  errEl.addEventListener('click', () => { errEl.style.display = 'none'; });   // 点一下提示就收起
 
   async function refreshMedia() {
     layout();
