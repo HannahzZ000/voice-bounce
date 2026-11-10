@@ -50,6 +50,13 @@
   /* 回放（发布前预览） */
   #editUI { position: absolute; left: 0; top: 0; width: 390px; height: 792px; display: none; pointer-events: none; }
   #editUI .ic { filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+  #retryBtn { position: absolute; left: 129px; width: 132px; height: 44px; display: none; z-index: 5; cursor: pointer;
+    background: #FFE600; border: 3px solid #111; border-radius: 22px; box-shadow: 5px 5px 0 #111; padding: 0 0 2px;
+    font: italic 800 21px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif; color: #fff; letter-spacing: .3px;
+    -webkit-text-stroke: 4px #111; paint-order: stroke fill; -webkit-tap-highlight-color: transparent;
+    animation: retryIn .35s cubic-bezier(.34,1.56,.64,1) both; }
+  #retryBtn:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #111; }
+  @keyframes retryIn { from { transform: scale(.3) rotate(-6deg); opacity: 0; } to { transform: none; opacity: 1; } }
   .pill {
     position: absolute; top: 712px; height: 43px; border-radius: 22px; border: 0; display: none;
     font: 600 16px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; cursor: pointer;
@@ -133,6 +140,7 @@
   <button class="hp" data-s="edit"   data-a="discard" style="left:4px;top:16px;width:50px;height:46px;border-radius:12px"></button>
   <button class="hp" data-s="feed"   data-a="toCamera" style="left:166px;top:712px;width:56px;height:44px;border-radius:10px"></button>
   <button class="hp" data-s="feed"   data-a="togglePlay" style="left:0;top:60px;width:330px;height:560px;border-radius:0"></button>
+  <button id="retryBtn">Retry</button>
 
   <div id="err"></div>
 </div>
@@ -169,7 +177,8 @@
   // DOM
   // =====================================================================
   const $ = s => document.querySelector(s);
-  const stage = $('#stage'), cam = $('#cam'), playback = $('#playback');
+  const stage = $('#stage'), cam = $('#cam'), playback = $('#playback'), retryBtn = $('#retryBtn');
+  retryBtn.addEventListener('click', e => { e.stopPropagation(); actions.retry(); });
   const cv = $('#game'), ctx = cv.getContext('2d');
   const timerEl = $('#timer'), arcEl = $('#arc'), recUI = $('#recUI'), errEl = $('#err');
 
@@ -505,6 +514,7 @@
     $('#storyBtn').style.display = $('#nextBtn').style.display = edit ? 'block' : 'none';
     document.querySelectorAll('.hp').forEach(b => { b.style.display = b.dataset.s === s ? 'block' : 'none'; });
     recUI.style.display = (s === 'rec' || s === 'paused') ? 'block' : 'none';
+    if (s !== 'rec' && s !== 'paused') retryBtn.style.display = 'none';
     cv.style.display = (s === 'rec' || s === 'paused') ? 'block' : 'none';
     const feed = s === 'feed' || edit;
     // iOS Safari：摄像头 video 一旦 display:none 再显示会变小，所以摄像头始终显示，回放盖在上面
@@ -538,6 +548,7 @@
     toPanel() { discardTake(); setScreen('panel'); },
     record() { unlockAudio(); mediaReady.then(() => startTake()); },
     stop() { endRound(true); },
+    retry() { unlockAudio(); if (screen === 'rec') newRound(); else mediaReady.then(() => startTake()); },   // 录制中直接重开一局，不打断录制
     finish() { finishTake(); },
     discard() { discardTake(); setScreen('camera'); },
     togglePlay() { if (playback.paused) playback.play().catch(() => {}); else playback.pause(); },
@@ -691,7 +702,7 @@
     vx = (tx - bx) / t;
   }
 
-  // 一局结束：录制暂停，回到可继续拍 / 完成的状态
+  // 手动停止录制（或到时长 / 切后台）：录制暂停，回到可继续拍 / 完成的状态
   function endRound() {
     if (screen !== 'rec') return;
     if (['play', 'countdown', 'sink', 'sing'].includes(state)) showResult(performance.now());
@@ -1385,6 +1396,8 @@
   }
   function drawResult(now) {
     const t = (now - resultAt) / 1000;
+    ctx.fillStyle = `rgba(0,0,0,${0.4 * Math.min(1, t / 0.3)})`;      // 背景之上压一层 40% 黑
+    ctx.fillRect(-20, -20, W + 40, H + 40);
     const e = t < 0.45 ? easeOutBack(t / 0.45) : 1;
     const cw = 236, ch = 158, cx = 195, cy = BOX.y + 22;
     ctx.save();
@@ -1745,10 +1758,7 @@
       if (now - sinkAt > 1000) showResult(now);
       return;
     }
-    if (state === 'result') {                           // 结算画面先录 2 秒再暂停
-      if (screen === 'rec' && now - resultAt > 2300) endRound();
-      return;
-    }
+    if (state === 'result') return;                     // 结算后录制照常继续，直到用户手动停止或点 Retry
     if (state !== 'play') return;
 
     dt *= score === 0 ? 0.8 : speedMul();               // 第一球慢一点
@@ -1890,6 +1900,10 @@
     drawSplashFx(tw);
     drawFxFront();
     if (state === 'result') drawResult(now);
+    // Retry 按钮：结算气泡出现后从气泡下面弹出来
+    const showRetry = state === 'result' && now - resultAt > 900;
+    if (showRetry !== (retryBtn.style.display === 'block')) retryBtn.style.display = showRetry ? 'block' : 'none';
+    if (showRetry) retryBtn.style.top = (BOX.y + 22 + 100) + 'px';
   }
 
   // =====================================================================
