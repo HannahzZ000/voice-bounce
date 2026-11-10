@@ -1,0 +1,65 @@
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+  height: 100%; overflow: hidden; background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none;
+}
+/* 界面按设计稿 390 宽搭建，按屏幕宽度缩放铺满；高度跟着浏览器可用高度自适应 */
+#stage { position: absolute; left: 0; top: 0; width: 390px; height: 792px; transform-origin: 0 0; overflow: hidden; z-index: 2; }
+/* 摄像头 / 回放视频放在缩放容器外面，用真实像素定位（iOS 锁屏回来后不会变小） */
+#cam, #playback { position: fixed; left: 0; top: 0; object-fit: cover; background: #111; }
+#cam { transform: scaleX(-1); z-index: 0; }
+#playback { visibility: hidden; z-index: 1; }
+/* 特效轮盘 */
+#carousel { position: absolute; left: 0; top: 560px; width: 390px; height: 140px; display: none; touch-action: none; }
+#carousel .ci { position: absolute; transition: left .28s ease, top .28s ease, width .28s ease, height .28s ease; pointer-events: none; }
+#carousel .ci img { width: 100%; height: 100%; display: block; }
+#ring { position: absolute; left: 153.5px; width: 83px; height: 83px; border: 3px solid #fff; border-radius: 50%; pointer-events: none; }
+#fxName {
+  position: absolute; left: 0; width: 390px; text-align: center; top: -78px; opacity: 0; transition: opacity .3s;
+  font: 700 15px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+#game { position: absolute; left: 0; top: 0; width: 390px; height: 694px; pointer-events: none; }
+.ov { position: absolute; left: 0; top: 0; width: 390px; height: 792px; pointer-events: none; display: none; }
+#recUI { position: absolute; left: 0; top: 0; width: 390px; height: 792px; pointer-events: none; display: none; overflow: visible; }
+#timer { font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #fff; filter: drop-shadow(0 1px 2.5px rgba(0,0,0,.2)); }
+.hp { position: absolute; display: none; background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
+/* 时长选择 10m / 60s / 15s / PHOTO / TEXT */
+#tabs { position: absolute; left: 0; top: 542px; margin-top: 0; height: 26px; display: none; white-space: nowrap; transition: transform .25s ease; }
+#tabs span {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: top;   /* 文字在白底里上下居中 */
+  height: 26px; line-height: 1; padding: 1px 8px 0; margin-right: 12px; border-radius: 13px;
+  font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.25); cursor: pointer;
+}
+#tabs span.on { background: #fff; color: #000; text-shadow: none; }
+/* 回放（发布前预览） */
+#editUI { position: absolute; left: 0; top: 0; width: 390px; height: 792px; display: none; pointer-events: none; }
+#editUI .ic { filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+#retryBtn { position: absolute; left: 129px; width: 132px; height: 44px; display: none; z-index: 5; cursor: pointer;
+  background: #FFE600; border: 3px solid #111; border-radius: 22px; box-shadow: 5px 5px 0 #111; padding: 0 0 2px;
+  font: italic 800 21px Poppins, "Arial Rounded MT Bold", -apple-system, sans-serif; color: #fff; letter-spacing: .3px;
+  -webkit-text-stroke: 4px #111; paint-order: stroke fill; -webkit-tap-highlight-color: transparent;
+  animation: retryIn .35s cubic-bezier(.34,1.56,.64,1) both; }
+#retryBtn:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #111; }
+@keyframes retryIn { from { transform: scale(.3) rotate(-6deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.pill {
+  position: absolute; top: 712px; height: 43px; border-radius: 22px; border: 0; display: none;
+  font: 600 16px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; cursor: pointer;
+}
+#storyBtn { left: 12px; width: 179px; background: #fff; color: #161823; text-align: left; padding-left: 66px; }
+#storyBtn i {
+  position: absolute; left: 31px; top: 7px; width: 29px; height: 29px; border-radius: 50%;
+  background: url(../assets/ui/avatar.jpg?v=3) center/cover; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #20D5EC;
+}
+#nextBtn { left: 199px; width: 179px; background: #FE2C55; color: #fff; }
+/* 手机横屏：提示竖过来（电脑上的宽窗口不提示） */
+#rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #000; color: #fff;
+  align-items: center; justify-content: center; flex-direction: column; gap: 14px; font: 600 17px -apple-system, sans-serif; }
+#rotate b { font: italic 800 26px Poppins, sans-serif; color: #FFE600; -webkit-text-stroke: 1px #111; }
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 520px) { #rotate { display: flex; } }
+#err {
+  position: absolute; left: 40px; right: 40px; top: 300px; display: none;
+  color: #fff; font-size: 14px; font-weight: 600; line-height: 1.5; text-align: center;
+  background: rgba(0,0,0,.5); border-radius: 16px; padding: 16px;
+}

@@ -1,7 +1,21 @@
-# 只发布游戏本身：index.html + assets，其余设计稿 / 原图 / 备份都不上传
+# 白名单：工作目录里还有大量设计稿、参考图和备份，只把下面这些放进仓库
 /*
-!/index.html
-!/assets/
 !/.gitignore
-!/.nojekyll
+!/.github/
 !/README.md
+!/package.json
+!/package-lock.json
+!/index.html
+!/css/
+!/js/
+!/assets/
+!/design/
+!/docs/
+!/tools/
+!/tests/
+
+# 生成物
+node_modules/
+tests/output/
+__pycache__/
+.DS_Store

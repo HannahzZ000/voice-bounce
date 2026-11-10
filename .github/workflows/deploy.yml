@@ -1,0 +1,41 @@
+# 推送到 main 自动发布到 GitHub Pages。
+# 只发布游戏本身（index.html / css / js / assets），设计导出、工具和测试不会出现在线上。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site
+        run: |
+          mkdir _site
+          cp -r index.html css js assets _site/
+          touch _site/.nojekyll
+          # 缓存刷新：css/js 链接里的 __BUILD__ 换成这次提交的短哈希
+          sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" _site/index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

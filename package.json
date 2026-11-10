@@ -1,0 +1,18 @@
+{
+  "name": "voice-bounce",
+  "private": true,
+  "description": "Voice-controlled TikTok-style camera game (static site, no build step)",
+  "scripts": {
+    "serve": "python3 tools/serve.py .",
+    "test": "node tests/viewport.test.js && node tests/permissions.test.js && node tests/flow.test.js && node tests/collision.test.js && node tests/pitch.test.js",
+    "test:viewport": "node tests/viewport.test.js",
+    "test:permissions": "node tests/permissions.test.js",
+    "test:flow": "node tests/flow.test.js",
+    "test:collision": "node tests/collision.test.js",
+    "test:pitch": "node tests/pitch.test.js",
+    "export": "for f in card parts hud fx sing retry; do python3 tools/export/export_$f.py; done"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^22.15.0"
+  }
+}
