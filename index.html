@@ -248,38 +248,52 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
-  // 中心音高：不再单独校准。有保存过就直接用；没有的话，你发出的第一声就是中心，之后边玩边慢慢自适应
-  let centerLog = parseFloat(store.get('vb_center2', ''));
+  // 中心音高：有保存过就直接用；没有的话，你发出的第一声先当中心。之后按“一个一个音”快速校准：
+  // 记住最近 16 个唱稳的音，让其中偏低的那几个（15% 分位）落在最左边附近。几个音之内就能纠正过来。
+  // （v3：换了存储 key，丢掉以前按帧慢慢学、可能被拖偏的旧中心）
+  let centerLog = parseFloat(store.get('vb_center3', ''));
   let baseReady = isFinite(centerLog);
   if (!baseReady) centerLog = Math.log2(200);
-  const firstSamples = [], adaptBuf = [], stableWin = [];
-  let lastAdaptT = 0;
+  const firstSamples = [], stableWin = [], curNote = [], noteBuf = [];
   const median = a => { const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
-  function adaptCenter(lf, now) {
+  function adaptCenter(lf) {
     if (!baseReady) {
       firstSamples.push(lf);
       if (firstSamples.length >= 12) {
         centerLog = median(firstSamples); baseReady = true;
-        store.set('vb_center2', String(centerLog));
+        store.set('vb_center3', String(centerLog));
       }
-      return;
     }
-    // 只学“唱稳了”的音：起音、滑音、收尾往下掉的那一截都不算，不然低端被拖得太低，真正的低音到不了最左
+    // 只收“唱稳了”的帧：起音、滑音、收尾往下掉的那一截都不算
     stableWin.push(lf); if (stableWin.length > 6) stableWin.shift();
     if (stableWin.length < 6 || (Math.max(...stableWin) - Math.min(...stableWin)) * 12 > 0.6) return;
-    adaptBuf.push(lf);
-    if (adaptBuf.length > 1200) adaptBuf.shift();          // 最近约 20 秒的出声
-    if (now - lastAdaptT > 1000 && adaptBuf.length > 120) {
-      lastAdaptT = now;
-      // 用你最近的“低音”（10% 分位）来对齐左端：高音唱得多也不会把中心往上拽，低音始终够得到最左边
-      const b = adaptBuf.slice().sort((x, y) => x - y);
-      const lo = b[Math.floor(b.length * 0.15)], hi = b[Math.floor(b.length * 0.9)];
-      if ((hi - lo) * 12 >= 3) {                          // 至少高低都试过了才调整
-        const target = lo + (RANGE.down - 0.7) / 12;
-        centerLog += (target - centerLog) * 0.06;         // 每秒只挪一点点，不会突然跳
-        store.set('vb_center2', String(centerLog));
+    curNote.push(lf);
+    // 正在唱的这个音就是你最低的那几个之一，板子却没到左边 → 当场把中心往上挪，板子跟着滑到左边
+    if (baseReady && noteBuf.length >= 2 && curNote.length >= 8) {
+      const b = noteBuf.slice().sort((x, y) => x - y);
+      const lo = b[Math.floor(b.length * 0.15)], hi = b[b.length - 1];
+      const cur = median(curNote.slice(-8));
+      const target = cur + (RANGE.down - 0.35) / 12;
+      if ((hi - lo) * 12 >= 2.5 && cur <= lo + 0.5 / 12 && target > centerLog) centerLog += (target - centerLog) * 0.15;
+    }
+  }
+  // 一个音唱完（静音）时调用：这个音的稳定音高记一票，然后校准中心
+  function endNote() {
+    const n = curNote.length;
+    if (n >= 8) {
+      noteBuf.push(median(curNote));
+      if (noteBuf.length > 16) noteBuf.shift();
+      if (baseReady && noteBuf.length >= 2) {
+        const b = noteBuf.slice().sort((x, y) => x - y);
+        const lo = b[Math.floor(b.length * 0.15)], hi = b[b.length - 1];
+        if ((hi - lo) * 12 >= 2.5) {                       // 有高有低才调整
+          const target = lo + (RANGE.down - 0.35) / 12;     // 偏低的音 → 最左边附近
+          centerLog += (target - centerLog) * 0.5;         // 每个音纠正一半，几个音就到位
+          store.set('vb_center3', String(centerLog));
+        }
       }
     }
+    curNote.length = 0;
   }
 
   // =====================================================================
@@ -363,7 +377,7 @@
       if (smoothLog === null && pitchHist.length < 3) return;
       const sorted = pitchHist.slice().sort((a, b) => a - b);
       const lf = sorted[sorted.length >> 1];
-      if (mode === 'voice') adaptCenter(lf, now);
+      if (mode === 'voice') adaptCenter(lf);
       if (mode === 'sing' && song && song.gbNow >= -0.5) singSamples.push(lf);
       smoothLog = oneEuro(lf, dt);
       pitchHz = Math.pow(2, smoothLog);
@@ -372,7 +386,7 @@
       else paddleT = singReady() ? u : null;             // 唱歌校准期间板子不动
     } else if (now - lastVoiceT > (mode === 'sing' ? SING_HOLD_MS : SILENCE_HOLD_MS)) {
       if (mode === 'sing') { const keep = paddleT; resetPitch(); paddleT = keep; }   // 唱歌：字间停顿时板子停在原地
-      else resetPitch();
+      else { if (smoothLog !== null) endNote(); resetPitch(); }
     }
   }
 
