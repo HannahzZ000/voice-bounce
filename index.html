@@ -157,7 +157,7 @@
   let dCam = 0, dBot = 0;          // 底部元素相对设计稿的位移：贴摄像头底边 / 贴屏幕底边
   let recLimit = 60;               // 录制上限（秒）：默认 60s，可在拍摄页切换 10m / 60s / 15s
   // 声音 → 板子：以校准音高为中心；不对称，低音方向需要变的半音更少
-  const RANGE = { down: 3.5, up: 8 };   // 往左（低音）只需降 3.5 个半音就到最左
+  const RANGE = { down: 3.5, up: 11 };   // 往左（低音）只需降 3.5 个半音就到最左
   const MIN_GATE = 0.0003, YIN_THRESHOLD = 0.3, YIN_FALLBACK = 0.5;
   const LANES = 7, SNAP = 0.25, OE_MIN_CUTOFF = 2.0, OE_BETA = 8;
   const PADDLE_FOLLOW = 16, PADDLE_MAX_SPEED = 2.2, PADDLE_SPEED_SCALE = 0.7, SILENCE_HOLD_MS = 180;
@@ -1305,11 +1305,18 @@
   const pianoImg = new Image(); pianoImg.src = 'assets/piano.png?v=1';
   const stageMid = () => (waveBase2() + H) / 2;
   const BAND_SPOTS = () => [60, 130, 200, 270, 340].map(x => [x, stageMid() + 10]);   // 音符从琴键上冒出来的位置
-  // 舞台色块：[左上 x, 右上 x, 底色, 网点颜色]
-  const STAGE_BLOCKS = [
-    [-80, 40, '#FF2E93', 'rgba(255,255,255,.38)'], [40, 120, '#FFE600', 'rgba(255,120,0,.5)'], [120, 205, '#25F4EE', 'rgba(20,70,220,.35)'],
-    [205, 290, '#2A3BFF', 'rgba(255,46,147,.6)'], [290, 360, '#FF5A1F', 'rgba(255,230,0,.55)'], [360, 480, '#9B3BFF', 'rgba(37,244,238,.45)'],
-  ];
+  // 舞台背景：粉色底 + 左边一团黄 + 右边一团青，边界是慢慢晃动的波浪线
+  function stageRegion(side, now) {                  // side -1 = 左边黄色，1 = 右边青色
+    const y0 = waveBase2() - 14, t = now / 1400;
+    const bx = y => side < 0
+      ? 128 - (y - y0) * 0.42 + 16 * Math.sin((y - y0) / 26 + t) + 7 * Math.sin((y - y0) / 11 - t * 1.3)
+      : 268 + (y - y0) * 0.3 + 18 * Math.sin((y - y0) / 30 - t + 2) + 6 * Math.sin((y - y0) / 13 + t * 1.1);
+    ctx.beginPath();
+    ctx.moveTo(side < 0 ? -10 : W + 10, y0);
+    for (let y = y0; y <= H + 10; y += 5) ctx.lineTo(bx(y), y);
+    ctx.lineTo(side < 0 ? -10 : W + 10, H + 10); ctx.closePath();
+    return bx;
+  }
   function drawBand(now) {
     const dt = Math.min(0.05, (now - (bandLastT || now)) / 1000); bandLastT = now;
     const beat = bandBeat(now), bi = Math.floor(beat), ph = beat - bi;
@@ -1327,14 +1334,13 @@
     const edge = () => { ctx.beginPath(); for (let x = -6; x <= W + 6; x += 6) x === -6 ? ctx.moveTo(x, top(x)) : ctx.lineTo(x, top(x)); };
     edge(); ctx.lineTo(W + 6, H + 10); ctx.lineTo(-6, H + 10); ctx.closePath();
     ctx.save(); ctx.clip();
-    const y0 = waveBase2() - 12, sl = 70;            // 斜条：上宽下错开，像漫画分格
-    STAGE_BLOCKS.forEach(([x0, x1, col, dot], i) => {
-      const quad = () => { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1 - sl, H + 10); ctx.lineTo(x0 - sl, H + 10); ctx.closePath(); };
-      quad(); ctx.fillStyle = col; ctx.fill();
+    ctx.fillStyle = '#FF2E93'; ctx.fillRect(-10, 0, W + 20, H + 10);
+    ctx.fillStyle = dotPattern('rgba(255,255,255,.32)'); ctx.fillRect(-10, 0, W + 20, H + 10);
+    [[-1, '#FFE600', 'rgba(255,120,0,.5)'], [1, '#25F4EE', 'rgba(20,70,220,.32)']].forEach(([side, col, dot]) => {
+      stageRegion(side, now); ctx.fillStyle = col; ctx.fill();
       ctx.fillStyle = dotPattern(dot); ctx.fill();
+      ctx.strokeStyle = BAND.K; ctx.lineWidth = 3; ctx.stroke();
     });
-    ctx.strokeStyle = BAND.K; ctx.lineWidth = 3;
-    STAGE_BLOCKS.forEach(([x0]) => { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 - sl, H + 10); ctx.stroke(); });
     ctx.restore();
     edge(); ctx.strokeStyle = BAND.K; ctx.lineWidth = 3.2; ctx.stroke();
     ctx.restore();
@@ -1347,7 +1353,7 @@
     if (!pianoImg.complete || !pianoImg.naturalWidth) return;
     const beat = bandBeat(now), ph = beat - Math.floor(beat);
     const pulse = beat >= 0 || !song ? Math.exp(-ph * 6) : 0;
-    const w = 440, h = w * pianoImg.naturalHeight / pianoImg.naturalWidth;
+    const w = 560, h = w * pianoImg.naturalHeight / pianoImg.naturalWidth;
     ctx.save();
     ctx.translate(195, stageMid() + 8 - pulse * 4);
     ctx.rotate(-0.04 + Math.sin(beat * Math.PI / 3) * 0.025);
