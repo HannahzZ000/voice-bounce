@@ -334,6 +334,7 @@
     const dt = Math.max(0.005, Math.min(0.05, (now - lastPitchT) / 1000));
     lastPitchT = now;
     if (f > 0 && f < 1500) {
+      if (now < sfxHoldUntil) { lastVoiceT = now; return; }   // 音效刚响：外放漏进麦克风，这几帧不信
       // 唱歌模式：这个音高正好是伴奏此刻在响的音，多半是外放漏进麦克风，跳过
       if (mode === 'sing' && song && accMasked(f)) { lastVoiceT = now; return; }   // 板子保持不动
       lastVoiceT = now;
@@ -423,6 +424,7 @@
     tdBuf = new Float32Array(analyser.fftSize);
     yinBuf = new Float32Array(analyser.fftSize);
     try { recDest = audioCtx.createMediaStreamDestination(); } catch {}
+    loadSfx();
     if (audioStream && audioStream.getAudioTracks().length) {
       const at = audioStream.getAudioTracks()[0];
       try { await at.applyConstraints(audioC); } catch {}
@@ -566,6 +568,27 @@
     const f = actions[b.dataset.a];
     if (f) f();
   }));
+
+  // ---- 音效：接住 = pop，掉海里 = splash（也录进视频） ----
+  const SFX = {};
+  let sfxHoldUntil = 0;
+  function loadSfx() {
+    ['pop', 'splash'].forEach(n => {
+      fetch('assets/sfx/' + n + '.mp3').then(r => r.arrayBuffer())
+        .then(ab => new Promise((ok, no) => audioCtx.decodeAudioData(ab, ok, no)))
+        .then(b => { SFX[n] = b; }).catch(() => {});
+    });
+  }
+  function playSfx(n, vol, rate) {
+    const b = SFX[n];
+    if (!b || !audioCtx || audioCtx.state !== 'running') return;
+    const src = audioCtx.createBufferSource(), g = audioCtx.createGain();
+    src.buffer = b; src.playbackRate.value = rate || 1; g.gain.value = vol;
+    src.connect(g); g.connect(audioCtx.destination);
+    if (recDest) g.connect(recDest);
+    src.start();
+    sfxHoldUntil = performance.now() + b.duration / (rate || 1) * 1000 + 60;
+  }
 
   function unlockAudio() {
     if (audioCtx && audioCtx.state !== 'running') { try { audioCtx.resume(); } catch {} }
@@ -1796,6 +1819,7 @@
     const oldFace = faceIdx;
     faceIdx = (faceIdx + 1) % faces.length;          // 每弹一下换一个表情
     impact(bx, PAD_Y, oldFace);
+    playSfx('pop', 0.9, 0.94 + Math.random() * 0.12);
     if (navigator.vibrate) navigator.vibrate(12);
     const apex = 694 * (0.12 + Math.random() * 0.14) + dCam;
     const rise = Math.max(694 * 0.25, (PAD_Y - R) - apex);
@@ -1856,6 +1880,7 @@
     const surf = waveY(1, bx, now / 1000);
     if (vy > 0 && by > surf + 4) {                      // 没接住：掉进水里
       splash(bx, surf);
+      playSfx('splash', 0.8);
       state = 'sink'; sinkAt = now; vy *= 0.25;
     }
   }
