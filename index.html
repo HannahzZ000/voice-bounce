@@ -1828,29 +1828,35 @@
     ctx.restore();
   }
 
-  // 屏幕上角的波普网点：从角落往里越来越小，范围很小
+  // 屏幕上角的波普网点：不规则的一团，从角落往里越来越小；左右形状不同
   const cornerCache = {};
-  function cornerDots(color) {
-    if (cornerCache[color]) return cornerCache[color];
-    const R = 120, sc = 3, c = document.createElement('canvas');
-    c.width = c.height = R * sc;
+  const CORNER = { w: 210, h: 240 };
+  function cornerDots(color, seed) {
+    const key = color + seed;
+    if (cornerCache[key]) return cornerCache[key];
+    const sc = 3, c = document.createElement('canvas');
+    c.width = CORNER.w * sc; c.height = CORNER.h * sc;
     const g = c.getContext('2d');
     g.scale(sc, sc); g.fillStyle = color;
-    for (let y = 2, row = 0; y <= R; y += 6.5, row++) for (let x = 2 + (row % 2 ? 3.75 : 0); x <= R; x += 7.5) {
-      const d = Math.hypot(x, y * 1.15) / R;
-      const r = 2.7 * Math.pow(Math.max(0, 1 - d), 0.9);
-      if (r < 0.35) continue;
+    const islands = seed ? [[150, 26, 34], [30, 176, 30], [92, 92, 22]] : [[128, 34, 30], [24, 158, 36], [70, 110, 20]];
+    for (let y = 3, row = 0; y <= CORNER.h; y += 7.4, row++) for (let x = 3 + (row % 2 ? 4.25 : 0); x <= CORNER.w; x += 8.5) {
+      const th = Math.atan2(y, x);
+      const edge = 1 + 0.2 * Math.sin(5 * th + seed * 2.1 + 1) + 0.13 * Math.sin(11 * th + seed * 3.7 + 2) + 0.08 * Math.sin(17 * th + seed);
+      let k = (1 - Math.hypot(x / 150, y / 165) / edge);        // 主体：贴着角落的不规则一团
+      for (const [ix, iy, ir] of islands) k = Math.max(k, 0.55 * (1 - Math.hypot(x - ix, y - iy) / ir));   // 旁边几小团
+      const r = 3.3 * Math.pow(Math.max(0, k), 0.75);
+      if (r < 0.45) continue;
       g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
     }
-    return (cornerCache[color] = c);
+    return (cornerCache[key] = c);
   }
   function drawCorners() {
-    const R = 120;
     ctx.save();
+    rr(0, 0, W, H, 20); ctx.clip();                      // 跟屏幕/摄像头画面的圆角一致
     ctx.globalAlpha = 0.75;
-    ctx.drawImage(cornerDots('#FF2E93'), 0, 0, R, R);
+    ctx.drawImage(cornerDots('#FF2E93', 0), 0, 0, CORNER.w, CORNER.h);
     ctx.translate(W, 0); ctx.scale(-1, 1);
-    ctx.drawImage(cornerDots('#25F4EE'), 0, 0, R, R);
+    ctx.drawImage(cornerDots('#25F4EE', 1), 0, 0, CORNER.w, CORNER.h);
     ctx.restore();
   }
   // 顶部实时记分板：奶白胶囊 + 黑描边 + 蓝色错位阴影，得分时弹一下
